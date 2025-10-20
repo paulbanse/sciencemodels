@@ -13,7 +13,7 @@ generation_params = {'seed': 4,
 all_params = {'n_agents':20,             # minimum 3
               "n_connection": 2,
               "initial_curiosity":[k/10 for k in range(11)], # interest for exploration
-              "use_distance": False,        # if True, agents take into account distance when choosing where to go
+              "use_distance": 0,        # if True, agents take into account distance when choosing where to go
               "epsilon": 0.1,           # noise in the measure of utility
               "harvest":0.02,            # proportion of science harvested at each iteration 
               "sizeGrid":20,
