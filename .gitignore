@@ -1,0 +1,42 @@
+# -----------------------------------------------------------
+# .gitignore für das Projekt "ifso_plan"
+# Erstellt im April 2025
+#
+# Hinweis:
+# Diese .gitignore selbst wird im Git-Repository mitgeführt
+# und sorgt dafür, dass bestimmte Dateien erst gar nicht
+# versioniert werden.
+# -----------------------------------------------------------
+
+# 🐍 Virtuelle Umgebungen (lokale Python-Installationen)
+venv/
+ifsoC/
+.venv/
+
+# 🐍 Automatisch erzeugte Python-Cache-Dateien
+__pycache__/
+*.py[cod]
+
+# 📓 Jupyter Notebook Checkpoints (Zwischenspeicher)
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# 🍏 MacOS Finder Dateien (werden auf Macs gerne automatisch erzeugt)
+.DS_Store
+
+# 🛠️ VS Code & PyCharm Projektordner (lokale IDE-Einstellungen)
+.vscode/
+.idea/
+
+# 🧪 Test- und Debug-Reste
+.pytest_cache/
+*.log
+
+# 📊 Automatisch erzeugte Daten- und Ergebnisdateien (Plots, Exporte etc.)
+*.csv
+*.xlsx
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf

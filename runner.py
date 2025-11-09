@@ -19,7 +19,7 @@ all_params = {'n_agents':20,             # minimum 3
               "epsilon": 0.1,           # noise in the measure of utility
               "harvest":0.02,            # proportion of science harvested at each iteration 
               "sizeGrid":20,
-              "initCellFunc":landscapefunctions.multipleGaussians, #landscapefunctions.randominit, # generation method for the landscape, see landscapefunctions for the definitions
+              "initCellFunc":landscapefunctions.randominit, #landscapefunctions.randominit, # generation method for the landscape, see landscapefunctions for the definitions
               "generation_params": generation_params,       # parameters for the generation method
               "agent_generation_rate": 0,                       # number of agent generated per generation, for example if 0.1, 10 new agent per generation
               "constant_population": 0,                     # NOT YET IMPLEMENTED delete as many agent as generate by age for a constant population
