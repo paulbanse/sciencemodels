@@ -5,11 +5,11 @@ import os
 
 # generation_params = {'seed': 4}
 
-#example of generation params for landscapefunctions.multipleGaussians : 
+# example of generation params for landscapefunctions.multipleGaussians : 
 
-"""generation_params = {'seed': 4, 
-                     "std": 5, 
-                     "number_gaussians": 2}"""
+# generation_params = {'seed': 4, 
+#                     "std": 5, 
+#                     "number_gaussians": 6}
 
 generation_params = {'prop_random': 5,
                      'seed': 4, 
@@ -30,4 +30,4 @@ all_params = {'n_agents':20,             # minimum 3
               "step_limit": 400
               }
 
-mesa_model.generate_data_parametric_exploration("end_report-noisy2.csv", param_grid = all_params, repeats_per_setting = 40, change_landscape_seed = True, intention = "w", skip_to = 0)
+mesa_model.generate_data_parametric_exploration("end_report-noisy.csv", param_grid = all_params, repeats_per_setting = 40, change_landscape_seed = True, intention = "w", skip_to = 0)

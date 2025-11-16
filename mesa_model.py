@@ -143,9 +143,15 @@ class MyModel(mesa.Model):
         self.explored_weighted_by_initial_knowledge = 0
         self.percentage_knowledge_harvested = 0
         self.explored_percentage = 0
-        stored_percentage_names = ["explored_percentage", "explored_weighted_by_initial_knowledge","percentage_knowledge_harvested"]
-        stored_percentage = [[0.5,-1],[0.9,-1]]
-        self.stored_percentage = [(k, deepcopy(stored_percentage)) for k in stored_percentage_names]
+        # stored_percentage_names = ["explored_percentage", "explored_weighted_by_initial_knowledge","percentage_knowledge_harvested"]
+        # stored_percentage = [[0.5,-1],[0.9,-1]]
+        # self.stored_percentage = [(k, deepcopy(stored_percentage)) for k in stored_percentage_names]
+        self.explored_50_step = -1
+        self.explored_90_step = -1
+        self.weighted_50_step = -1
+        self.weighted_90_step = -1
+        self.harvested_50_step = -1
+        self.harvested_90_step = -1
 
         if self.use_distance == False:
             print("Agents will NOT use distance information when choosing where to go, curiosity and noise will have similar effects")
@@ -206,6 +212,7 @@ class MyModel(mesa.Model):
                              "avg_knowledge_on_grid": lambda m: np.mean(m.grid.properties["knowledge"].data),
                              "best_knowledge": lambda m: np.max(m.grid.properties["knowledge"].data),
                              "avg_distance_between_agents": lambda m: m.agent_avg_distance,
+                             "percentage_knowledge_harvested": lambda m: m.percentage_knowledge_harvested,
                              },
             agent_reporters={"prestige":   "prestige",
                              "lastTileKnowledge": "lastTileKnowledge"
@@ -283,13 +290,27 @@ class MyModel(mesa.Model):
         self.explored_weighted_by_initial_knowledge = np.sum(self.grid.properties["explored"].data * (self.grid.properties["initial_knowledge"].data))/self.totalInitialKnowledge
         self.agent_avg_distance = np.mean([ np.mean([a.computeDistance(b.pos) for b in self.agents if a != b]) for a in self.agents])
         self.percentage_knowledge_harvested = (self.totalInitialKnowledge - np.sum(self.grid.properties["knowledge"].data))/self.totalInitialKnowledge
+        # if self.steps % 100 == 0:  # Print every 10 steps
+        #    print(f"Step {self.steps}: percentage_knowledge_harvested = {self.percentage_knowledge_harvested}")
         self.datacollector.collect(self)
+        if self.explored_50_step == -1 and self.explored_percentage >= 0.5: 
+            self.explored_50_step = self.steps
+        if self.explored_90_step == -1 and self.explored_percentage >= 0.9: 
+            self.explored_90_step = self.steps
+        if self.weighted_50_step == -1 and self.explored_weighted_by_initial_knowledge >= 0.5: 
+            self.weighted_50_step = self.steps
+        if self.weighted_90_step == -1 and self.explored_weighted_by_initial_knowledge >= 0.9: 
+            self.weighted_90_step = self.steps
+        if self.harvested_50_step == -1 and self.percentage_knowledge_harvested >= 0.1: 
+            self.harvested_50_step = self.steps
+        if self.harvested_90_step == -1 and self.percentage_knowledge_harvested >= 0.25: 
+            self.harvested_90_step = self.steps
 
-        for (name,lst_per) in self.stored_percentage:
-            value = self.__getattribute__(name)
-            for per in lst_per:
-                if per[1] == -1 and value >= per[0]:
-                    per[1] = self.steps
+        #for (name,lst_per) in self.stored_percentage:
+        #    value = self.__getattribute__(name)
+        #    for per in lst_per:
+        #        if per[1] == -1 and value >= per[0]:
+        #            per[1] = self.steps
             
 
     def step(self, endupdate = True):
