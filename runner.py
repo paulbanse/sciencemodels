@@ -31,7 +31,9 @@ all_params = {'n_agents':20,             # minimum 3
               "constant_population": 0,                     # NOT YET IMPLEMENTED delete as many agent as generate by age for a constant population
               "agent_seed": 1,                           # seed for the random of the agents
               "step_limit": 200,
-              "AgentGenerationFunc": landscapefunctions.beta
+              "AgentGenerationFunc": landscapefunctions.beta,
+              "visibility_factor_for_prestige": 0.5,
+              "vanishing_factor_for_prestige": 0.9999
               }
 model = mesa_model.MyModel(**all_params)
 

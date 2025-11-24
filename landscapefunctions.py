@@ -56,7 +56,6 @@ def beta(mu, seed, params):
         std_beta = params.get("std_curiosity", 0.1)
         alpha =  ((1 - mu) / std_beta**2 - 1 / mu) * mu ** 2
         beta = alpha * (1 / mu - 1)
-        print(alpha,beta)
         return np.random.beta(alpha, beta)
     else:
         return mu

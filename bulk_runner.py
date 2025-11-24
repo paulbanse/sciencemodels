@@ -13,7 +13,8 @@ import os
 
 generation_params = {'prop_random': 5,
                      'seed': 4, 
-                     "std": 5}
+                     "std": 5,
+                     "std_curiosity": 0.2} 
 
 all_params = {'n_agents':20,             # minimum 3
               "n_connection": 2,
@@ -27,7 +28,10 @@ all_params = {'n_agents':20,             # minimum 3
               "agent_generation_rate": 0,                       # number of agent generated per generation, for example if 0.1, 10 new agent per generation
               "constant_population": 0,                     # NOT YET IMPLEMENTED delete as many agent as generate by age for a constant population
               "agent_seed": 1,                           # seed for the random of the agents
-              "step_limit": 400
+              "step_limit": 400,
+              "AgentGenerationFunc": landscapefunctions.beta, # if this is not defined the function is just 
+              "visibility_factor_for_prestige": 0.5,
+              "vanishing_factor_for_prestige": 0.99 
               }
 
-mesa_model.generate_data_parametric_exploration("end_report-noisy.csv", param_grid = all_params, repeats_per_setting = 40, change_landscape_seed = True, intention = "w", skip_to = 0)
+mesa_model.generate_data_parametric_exploration("test_report.csv", param_grid = all_params, repeats_per_setting = 40, change_landscape_seed = True, intention = "w", skip_to = 0)

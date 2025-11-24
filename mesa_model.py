@@ -65,10 +65,13 @@ class Scientist(mesa.Agent):
         self.prestige += value
         self.prestige_visibility += value**(1-self.model.visibility_factor_for_prestige) * self.visibility **(self.model.visibility_factor_for_prestige)
         x = self.model.vanishing_factor_for_prestige
-        temp = self.prestige_vanishing * (1-x) #cancels the normalization
-        temp = temp *x #vanishes past values
-        temp += value  # adds the new one
-        self.prestige_vanishing = temp/(1-x) #normalize for comparizon between different vanishing powers
+        if x != 1:
+            temp = self.prestige_vanishing 
+            temp = temp *x #vanishes past values
+            temp += value  # adds the new one
+            self.prestige_vanishing = temp
+        else:
+            self.prestige_vanishing += value
 
  
     def computeAllrewards2(self, pos, Novelty):
@@ -102,12 +105,14 @@ class Scientist(mesa.Agent):
 
         self.age += 1
         self.lastTileKnowledge = self.model.grid.properties["knowledge"].data[self.pos]
+        
         self.incrPrestige(self.lastTileKnowledge) 
+        print("did update prestige", self.prestige_vanishing, self.prestige, "value was", self.lastTileKnowledge)
 
 
 
 class MyModel(mesa.Model):
-    def __init__(self, n_agents, n_connection, initial_curiosity, epsilon, harvest, sizeGrid, initCellFunc, use_distance, generation_params = {"seed" :0}, agent_generation_rate = -1, constant_population = 1, agent_seed = 0,step_limit = 400, AgentGenerationFunc = lambda cur,seed: cur):
+    def __init__(self, n_agents, n_connection, initial_curiosity, epsilon, harvest, sizeGrid, initCellFunc, use_distance, generation_params = {"seed" :0}, agent_generation_rate = -1, constant_population = 1, agent_seed = 0,step_limit = 400, AgentGenerationFunc = lambda cur,seed: cur, visibility_factor_for_prestige = 0, vanishing_factor_for_prestige = 0):
         ''' parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc '''
         super().__init__()
         self.number_connection = n_connection
@@ -127,8 +132,8 @@ class MyModel(mesa.Model):
         self.totalInitialKnowledge = 0
         self.error_imbalance = 5
         self.step_limit = step_limit
-        self.visibility_factor_for_prestige = 0
-        self.vanishing_factor_for_prestige = 0
+        self.visibility_factor_for_prestige = visibility_factor_for_prestige
+        self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
 
         self.avgcurrentAgentKnowledge = 0  
         self.agent_avg_distance = 0
@@ -166,7 +171,8 @@ class MyModel(mesa.Model):
         
 
         for _ in range(n_agents):
-            a = Scientist(self, AgentGenerationFunc(initial_curiosity,self._seed + _, generation_params),epsilon)
+            w = AgentGenerationFunc(initial_curiosity,self._seed + _, generation_params)
+            a = Scientist(self, w,epsilon)
             coords = (self.rng.randrange(0, sizeGrid), self.rng.randrange(0, sizeGrid))
             a.age = self.rng.randint(23,50)
             self.grid.place_agent(a, coords)
@@ -247,8 +253,7 @@ class MyModel(mesa.Model):
         self.explored_weighted_by_initial_knowledge = np.sum(self.grid.properties["explored"].data * (self.grid.properties["initial_knowledge"].data))/self.totalInitialKnowledge
         self.agent_avg_distance = np.mean([ np.mean([a.computeDistance(b.pos) for b in self.agents if a != b]) for a in self.agents])
         self.percentage_knowledge_harvested = (self.totalInitialKnowledge - np.sum(self.grid.properties["knowledge"].data))/self.totalInitialKnowledge
-        # if self.steps % 100 == 0:  # Print every 10 steps
-        #    print(f"Step {self.steps}: percentage_knowledge_harvested = {self.percentage_knowledge_harvested}")
+
         self.datacollector.collect(self)
         if self.explored_50_step == -1 and self.explored_percentage >= 0.5: 
             self.explored_50_step = self.steps
@@ -387,7 +392,6 @@ class MyModel(mesa.Model):
                     PosX = [k.pos[0]+(k.unique_id/self.number_agents-0.5)**2 for k in self.agents ]
                     PosY = [k.pos[1]+(k.unique_id/self.number_agents-0.5)**2 for k in self.agents ]
                     PosAge = [k.curiosity for k in self.agents]
-                    print(PosAge[random.randint(1,self.number_agents)-1])
                     data = np.stack([PosY,PosX]).T
                     scat.set_offsets(data)
                     scat.set_array(np.array(PosAge))
@@ -476,7 +480,7 @@ def generate_data_parametric_exploration(filename, param_grid, repeats_per_setti
     # Create a list of all combinations of parameters
 
     param_combinations = list(itertools.product(*[param_grid[k] if k in param_as_lists else [param_grid[k]] for k in param_grid.keys()]))
-    print("param_combinations", len(param_combinations))
+
     # Create a list of parameter names
     param_names = list(param_grid.keys())
     # Loop through all combinations of parameters
