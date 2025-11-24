@@ -2,19 +2,25 @@
 import mesa_model
 import landscapefunctions
 import os
+import numpy as np
 
 generation_params = {'seed': 4, 
                      "std": 5, 
-                     "number_gaussians": 2}
+                     "number_gaussians": 2,
+                     "std_curiosity": 0.2}
 """example of generation params for landscapefunctions.multipleGaussians : 
 
 generation_params = {'seed': 4, 
                      "std": 5, 
                      "number_gaussians": 2}
 """
+
+
+
+
 all_params = {'n_agents':20,             # minimum 3
               "n_connection": 2,
-              "initial_curiosity":1, # interest for exploration
+              "initial_curiosity":0.5, # interest for exploration
               "use_distance": 0,        # if True, agents take into account distance when choosing where to go
               "epsilon": 0.1,           # noise in the measure of utility
               "harvest":0.02,            # proportion of science harvested at each iteration 
@@ -24,7 +30,8 @@ all_params = {'n_agents':20,             # minimum 3
               "agent_generation_rate": 0,                       # number of agent generated per generation, for example if 0.1, 10 new agent per generation
               "constant_population": 0,                     # NOT YET IMPLEMENTED delete as many agent as generate by age for a constant population
               "agent_seed": 1,                           # seed for the random of the agents
-              "step_limit": 400
+              "step_limit": 200,
+              "AgentGenerationFunc": landscapefunctions.beta
               }
 model = mesa_model.MyModel(**all_params)
 

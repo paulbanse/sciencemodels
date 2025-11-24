@@ -49,4 +49,15 @@ def multipleGaussians(posX,posY,size, args):
         tot += Gaussian(posX,posY,size, tempDict)
     return tot
 
+## additional function for agent curiosity 
+def beta(mu, seed, params): 
+    if mu > 0 and mu < 1 :
+        np.random.seed(seed)
+        std_beta = params.get("std_curiosity", 0.1)
+        alpha =  ((1 - mu) / std_beta**2 - 1 / mu) * mu ** 2
+        beta = alpha * (1 / mu - 1)
+        print(alpha,beta)
+        return np.random.beta(alpha, beta)
+    else:
+        return mu
 
