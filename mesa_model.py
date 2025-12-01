@@ -61,6 +61,10 @@ class Scientist(mesa.Agent):
         dY = min(dY1,dY2)
         return (dX + dY)
     
+    def get_visibility_value(self, value):
+        prestige_visible = value**(1-self.model.visibility_factor_for_prestige) * self.visibility **(self.model.visibility_factor_for_prestige)
+        return prestige_visible
+
     def incrPrestige(self, value):
         self.prestige += value
         self.prestige_visibility += value**(1-self.model.visibility_factor_for_prestige) * self.visibility **(self.model.visibility_factor_for_prestige)
@@ -88,15 +92,22 @@ class Scientist(mesa.Agent):
         '''pick a random node and check if according to the agent preference it is better to move to that node'''
         neighbors_nodes = self.model.grid.get_neighborhood(self.pos, moore = False, include_center=False)
         optionpos = self.model.rng.choice(neighbors_nodes)
-
-        currentRwNovelty = self.model.computeRewardKnowledge(self.pos)
-        newRwNovelty = self.model.computeRewardKnowledge(optionpos)
-
         noise = 2*(self.model.rng.random()-0.5 ) 
-        totCurrentReward = self.computeAllrewards2(self.pos,currentRwNovelty) + self.epsilon*noise
+        if self.model.use_visibility_reward: 
+            value = self.model.computeKnowledge(self.pos)
+            totCurrentReward = self.get_visibility_value(value)
+            value_new = self.model.computeKnowledge(optionpos) + self.model.error_imbalance *self.epsilon*noise
+            totNewReward = self.get_visibility_value(value_new)
 
-        noise = 2*(self.model.rng.random()-0.5 )
-        totNewReward = self.computeAllrewards2(optionpos,newRwNovelty) + self.model.error_imbalance *self.epsilon*noise
+        else:
+            currentRwNovelty = self.model.computeKnowledge(self.pos)
+            newRwNovelty = self.model.computeKnowledge(optionpos)
+
+            
+            totCurrentReward = self.computeAllrewards2(self.pos,currentRwNovelty) + self.epsilon*noise
+
+            noise = 2*(self.model.rng.random()-0.5 )
+            totNewReward = self.computeAllrewards2(optionpos,newRwNovelty) + self.model.error_imbalance *self.epsilon*noise
 
         if totNewReward - totCurrentReward > 0 :
             self.model.new_place(self, optionpos)
@@ -112,7 +123,10 @@ class Scientist(mesa.Agent):
 
 
 class MyModel(mesa.Model):
-    def __init__(self, n_agents, n_connection, initial_curiosity, epsilon, harvest, sizeGrid, initCellFunc, use_distance, generation_params = {"seed" :0}, agent_generation_rate = -1, constant_population = 1, agent_seed = 0,step_limit = 400, AgentGenerationFunc = lambda cur,seed: cur, visibility_factor_for_prestige = 0, vanishing_factor_for_prestige = 0):
+    def __init__(self, n_agents, n_connection, initial_curiosity, epsilon, harvest, sizeGrid, 
+                 initCellFunc, use_distance, generation_params = {"seed" :0}, 
+                 agent_generation_rate = -1, constant_population = 1, agent_seed = 0,step_limit = 400, AgentGenerationFunc = lambda cur,seed: cur, 
+                 visibility_factor_for_prestige = 0, vanishing_factor_for_prestige = 0, use_visibility_reward = True):
         ''' parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc '''
         super().__init__()
         self.number_connection = n_connection
@@ -134,6 +148,7 @@ class MyModel(mesa.Model):
         self.step_limit = step_limit
         self.visibility_factor_for_prestige = visibility_factor_for_prestige
         self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
+        self.use_visibility_reward = use_visibility_reward
 
         self.avgcurrentAgentKnowledge = 0  
         self.agent_avg_distance = 0
@@ -204,9 +219,6 @@ class MyModel(mesa.Model):
     def updateknowledge(self):
         self.avgcurrentAgentKnowledge = np.mean([agent.lastTileKnowledge for agent in self.agents])
 
-
-            
-
     def new_place(self, agent1,coords, newAgent = False):
         '''function used to modify an agent location and update the surrounding agent's distance list'''
         if not(newAgent): 
@@ -220,7 +232,7 @@ class MyModel(mesa.Model):
             if agent2 != agent1:
                 dist = agent1.computeDistance(agent2.pos)
 
-    def computeRewardKnowledge(self,pos):
+    def computeKnowledge(self,pos):
         posX,posY = pos
         return (self.grid.properties["knowledge"].data[posX,posY])
     

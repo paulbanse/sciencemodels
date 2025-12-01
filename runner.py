@@ -33,7 +33,8 @@ all_params = {'n_agents':20,             # minimum 3
               "step_limit": 200,
               "AgentGenerationFunc": landscapefunctions.beta,
               "visibility_factor_for_prestige": 0.5,
-              "vanishing_factor_for_prestige": 0.9999
+              "vanishing_factor_for_prestige": 0.9999,
+              "use_visibility_reward": True,
               }
 model = mesa_model.MyModel(**all_params)
 
