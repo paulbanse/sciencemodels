@@ -3,18 +3,18 @@ import mesa_model
 import landscapefunctions
 import os
 
-# generation_params = {'seed': 4}
+generation_params = {'seed': 4}
 
 # example of generation params for landscapefunctions.multipleGaussians : 
 
 # generation_params = {'seed': 4, 
 #                     "std": 5, 
-#                     "number_gaussians": 6}
+#                     "number_gaussians": 2}
 
-generation_params = {'prop_random': 5,
-                     'seed': 4, 
-                     "std": 5,
-                     "std_curiosity": 0.2} 
+# generation_params = {'prop_random': 5,
+#                      'seed': 4, 
+#                      "std": 5,
+#                      "std_curiosity": 0.2} 
 
 all_params = {'n_agents':20,             # minimum 3
               "n_connection": 2,
@@ -23,7 +23,7 @@ all_params = {'n_agents':20,             # minimum 3
               "epsilon": 0.1,           # noise in the measure of utility
               "harvest":0.02,            # proportion of science harvested at each iteration 
               "sizeGrid":20,
-              "initCellFunc":landscapefunctions.noisyGaussian, # generation method for the landscape, see landscapefunctions for the definitions
+              "initCellFunc":landscapefunctions.randominit, # generation method for the landscape, see landscapefunctions for the definitions
               "generation_params": generation_params,       # parameters for the generation method
               "agent_generation_rate": 0,                       # number of agent generated per generation, for example if 0.1, 10 new agent per generation
               "constant_population": 0,                     # NOT YET IMPLEMENTED delete as many agent as generate by age for a constant population
@@ -34,4 +34,6 @@ all_params = {'n_agents':20,             # minimum 3
               "vanishing_factor_for_prestige": 0.99 
               }
 
-mesa_model.generate_data_parametric_exploration("test_report.csv", param_grid = all_params, repeats_per_setting = 40, change_landscape_seed = True, intention = "w", skip_to = 0)
+filename = "testrun_harmonizedKnowledge_" + "_".join([f"{key}{value}" for key, value in generation_params.items()]) + ".csv"
+
+mesa_model.generate_data_parametric_exploration(filename, param_grid = all_params, repeats_per_setting = 40, change_landscape_seed = True, intention = "w", skip_to = 0)
