@@ -15,6 +15,7 @@ ifsoC/
 
 # 🐍 Automatisch erzeugte Python-Cache-Dateien
 __pycache__/
+data/
 *.py[cod]
 
 # 📓 Jupyter Notebook Checkpoints (Zwischenspeicher)
