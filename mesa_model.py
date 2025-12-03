@@ -16,6 +16,7 @@ from pandas import DataFrame
 import os
 from copy import deepcopy
 from itertools import product
+import warnings
 
 pause = False
 
@@ -45,8 +46,8 @@ class Scientist(mesa.Agent):
         self.prestige_vanishing = 0
         self.age = 23
         self.lastTileKnowledge = 0
-        self.visibility = 0
         self.model = model
+        self.visibility = 0
 
 
     def computeDistance(self,otherAgentPos):
@@ -60,14 +61,10 @@ class Scientist(mesa.Agent):
         dY2 = abs((Y1 - Y2)%Size)
         dY = min(dY1,dY2)
         return (dX + dY)
-    
-    def get_visibility_value(self, value):
-        prestige_visible = value**(1-self.model.visibility_factor_for_prestige) * self.visibility **(self.model.visibility_factor_for_prestige)
-        return prestige_visible
 
     def incrPrestige(self, value):
         self.prestige += value
-        self.prestige_visibility += value**(1-self.model.visibility_factor_for_prestige) * self.visibility **(self.model.visibility_factor_for_prestige)
+        self.prestige_visibility += value**(1-self.curiosity) * self.visibility **(self.curiosity)
         x = self.model.vanishing_factor_for_prestige
         if x != 1:
             temp = self.prestige_vanishing 
@@ -78,55 +75,55 @@ class Scientist(mesa.Agent):
             self.prestige_vanishing += value
 
  
-    def computeAllrewards2(self, pos, Novelty):
+    def computeAllrewards(self, pos, Novelty):
         """ This part is just a test, we change the network reward by just the avg distance of
          all agents divided the average distance of the current agent"""
         if self.model.use_distance == False:
-            return self.curiosity *Novelty/ self.model.avgcurrentAgentKnowledge
+            return self.curiosity *Novelty/ self.model.avgcurrentAgentKnowledge, 0
         avgAgentDistance = np.mean([a.computeDistance(pos) for a in self.model.agents if a != self])
         avgAllDistance = self.model.agent_avg_distance
-
-        return self.curiosity * Novelty/ self.model.avgcurrentAgentKnowledge + (1-self.curiosity) * (avgAllDistance+1)/(avgAgentDistance+1)
+        visibility = (avgAllDistance+1)/(avgAgentDistance+1)
+        if self.model.use_visibility_reward:
+            reward = Novelty ** (self.curiosity)* visibility**(1-self.curiosity)
+        else:
+            reward = self.curiosity * Novelty/ self.model.avgcurrentAgentKnowledge + (1-self.curiosity) * visibility
+        return reward, visibility
+    
 
     def step(self):
         '''pick a random node and check if according to the agent preference it is better to move to that node'''
         neighbors_nodes = self.model.grid.get_neighborhood(self.pos, moore = False, include_center=False)
         optionpos = self.model.rng.choice(neighbors_nodes)
         noise = 2*(self.model.rng.random()-0.5 ) 
-        if self.model.use_visibility_reward: 
-            value = self.model.computeKnowledge(self.pos)
-            totCurrentReward = self.get_visibility_value(value)
-            value_new = self.model.computeKnowledge(optionpos) + self.model.error_imbalance *self.epsilon*noise
-            totNewReward = self.get_visibility_value(value_new)
 
-        else:
-            currentRwNovelty = self.model.computeKnowledge(self.pos)
-            newRwNovelty = self.model.computeKnowledge(optionpos)
+        currentRwNovelty = self.model.computeKnowledge(self.pos)
+        newRwNovelty = self.model.computeKnowledge(optionpos)
 
-            
-            totCurrentReward = self.computeAllrewards2(self.pos,currentRwNovelty) + self.epsilon*noise
+        
+        totCurrentReward, currenVis = self.computeAllrewards(self.pos,currentRwNovelty) 
 
-            noise = 2*(self.model.rng.random()-0.5 )
-            totNewReward = self.computeAllrewards2(optionpos,newRwNovelty) + self.model.error_imbalance *self.epsilon*noise
+        noise = 2*(self.model.rng.random()-0.5 )
+        totNewReward, newVis = self.computeAllrewards(optionpos,newRwNovelty*(1 + self.epsilon*noise))
 
         if totNewReward - totCurrentReward > 0 :
             self.model.new_place(self, optionpos)
+            self.visibility = newVis
+        else:
+            self.visibility = currenVis
+
             
         self.model.Farm(self.pos) #farming also updates AvgAgentKnowledge
-
+        
         self.age += 1
         self.lastTileKnowledge = self.model.grid.properties["knowledge"].data[self.pos]
-        
         self.incrPrestige(self.lastTileKnowledge) 
-        print("did update prestige", self.prestige_vanishing, self.prestige, "value was", self.lastTileKnowledge)
 
 
 
 class MyModel(mesa.Model):
     def __init__(self, n_agents, n_connection, initial_curiosity, epsilon, harvest, sizeGrid, 
                  initCellFunc, use_distance, generation_params = {"seed" :0}, 
-                 agent_generation_rate = -1, constant_population = 1, agent_seed = 0,step_limit = 400, AgentGenerationFunc = lambda cur,seed: cur, 
-                 visibility_factor_for_prestige = 0, vanishing_factor_for_prestige = 0, use_visibility_reward = True):
+                 agent_generation_rate = -1, constant_population = 1, agent_seed = 0,step_limit = 400, AgentGenerationFunc = lambda cur,seed: cur, vanishing_factor_for_prestige = 0, use_visibility_reward = True):
         ''' parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc '''
         super().__init__()
         self.number_connection = n_connection
@@ -144,9 +141,7 @@ class MyModel(mesa.Model):
         self.grid.add_property_layer(PropertyLayer("initial_knowledge",  sizeGrid,sizeGrid,0.0, dtype=float) )
         self.grid.add_property_layer(PropertyLayer("explored",  sizeGrid,sizeGrid,False, dtype=bool) )
         self.totalInitialKnowledge = 0
-        self.error_imbalance = 5
         self.step_limit = step_limit
-        self.visibility_factor_for_prestige = visibility_factor_for_prestige
         self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
         self.use_visibility_reward = use_visibility_reward
 
@@ -158,17 +153,15 @@ class MyModel(mesa.Model):
         self.explored_weighted_by_initial_knowledge = 0
         self.percentage_knowledge_harvested = 0
         self.explored_percentage = 0
-        # stored_percentage_names = ["explored_percentage", "explored_weighted_by_initial_knowledge","percentage_knowledge_harvested"]
-        # stored_percentage = [[0.5,-1],[0.9,-1]]
-        # self.stored_percentage = [(k, deepcopy(stored_percentage)) for k in stored_percentage_names]
-        self.explored_50_step = -1
-        self.explored_90_step = -1
-        self.weighted_50_step = -1
-        self.weighted_90_step = -1
-        self.harvested_50_step = -1
-        self.harvested_90_step = -1
+        self._default_steps_thresholds = step_limit*(1.25)
+        self.explored_50_step = self._default_steps_thresholds
+        self.explored_90_step = self._default_steps_thresholds
+        self.weighted_50_step = self._default_steps_thresholds
+        self.weighted_90_step = self._default_steps_thresholds
+        self.harvested_50_step = self._default_steps_thresholds
+        self.harvested_90_step = self._default_steps_thresholds
 
-        if self.use_distance == False:
+        if self.use_distance == False and not(initial_curiosity == 0 or epsilon == 0 or use_visibility_reward ):
             print("Agents will NOT use distance information when choosing where to go, curiosity and noise will have similar effects")
 
         self._seed = agent_seed
@@ -234,7 +227,8 @@ class MyModel(mesa.Model):
 
     def computeKnowledge(self,pos):
         posX,posY = pos
-        return (self.grid.properties["knowledge"].data[posX,posY])
+        value = self.grid.properties["knowledge"].data[posX,posY]
+        return (value)
     
     def Farm(self, pos):
         self.grid.properties["knowledge"].data[pos] = self.grid.properties["knowledge"].data[pos] * (1- self.harvest)
@@ -267,25 +261,20 @@ class MyModel(mesa.Model):
         self.percentage_knowledge_harvested = (self.totalInitialKnowledge - np.sum(self.grid.properties["knowledge"].data))/self.totalInitialKnowledge
 
         self.datacollector.collect(self)
-        if self.explored_50_step == -1 and self.explored_percentage >= 0.5: 
+        if self.explored_50_step == self._default_steps_thresholds and self.explored_percentage >= 0.5: 
             self.explored_50_step = self.steps
-        if self.explored_90_step == -1 and self.explored_percentage >= 0.9: 
+        if self.explored_90_step == self._default_steps_thresholds and self.explored_percentage >= 0.9: 
             self.explored_90_step = self.steps
-        if self.weighted_50_step == -1 and self.explored_weighted_by_initial_knowledge >= 0.5: 
+        if self.weighted_50_step == self._default_steps_thresholds and self.explored_weighted_by_initial_knowledge >= 0.5: 
             self.weighted_50_step = self.steps
-        if self.weighted_90_step == -1 and self.explored_weighted_by_initial_knowledge >= 0.9: 
+        if self.weighted_90_step == self._default_steps_thresholds and self.explored_weighted_by_initial_knowledge >= 0.9: 
             self.weighted_90_step = self.steps
-        if self.harvested_50_step == -1 and self.percentage_knowledge_harvested >= 0.1: 
+        if self.harvested_50_step == self._default_steps_thresholds and self.percentage_knowledge_harvested >= 0.1: 
             self.harvested_50_step = self.steps
-        if self.harvested_90_step == -1 and self.percentage_knowledge_harvested >= 0.25: 
+        if self.harvested_90_step == self._default_steps_thresholds and self.percentage_knowledge_harvested >= 0.25: 
             self.harvested_90_step = self.steps
 
-        #for (name,lst_per) in self.stored_percentage:
-        #    value = self.__getattribute__(name)
-        #    for per in lst_per:
-        #        if per[1] == -1 and value >= per[0]:
-        #            per[1] = self.steps
-            
+
 
     def step(self, endupdate = True):
         # compute everything and let agents take the decision 
