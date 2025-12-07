@@ -93,25 +93,30 @@ class Scientist(mesa.Agent):
     def step(self):
         '''pick a random node and check if according to the agent preference it is better to move to that node'''
         neighbors_nodes = self.model.grid.get_neighborhood(self.pos, moore = False, include_center=False)
-        optionpos = self.model.rng.choice(neighbors_nodes)
-        noise = 2*(self.model.rng.random()-0.5 ) 
-
+        # optionpos = self.model.rng.choice(neighbors_nodes)
         currentRwNovelty = self.model.computeKnowledge(self.pos)
-        newRwNovelty = self.model.computeKnowledge(optionpos)
+        totCurrentReward, currentVis = self.computeAllrewards(self.pos, currentRwNovelty)
 
+        best_reward = float('-inf')
+        optionpos = self.pos  # fallback to current position
+        best_vis = self.visibility
+
+        for neighbor in neighbors_nodes:
+            neighborRwNovelty = self.model.computeKnowledge(neighbor)
+            noise = 2*(self.model.rng.random()-0.5)
+            totReward, vis = self.computeAllrewards(neighbor, neighborRwNovelty*(1 + self.epsilon*noise))
+    
+            if totReward > best_reward:
+                best_reward = totReward
+                optionpos = neighbor
+                best_vis = vis
         
-        totCurrentReward, currenVis = self.computeAllrewards(self.pos,currentRwNovelty) 
-
-        noise = 2*(self.model.rng.random()-0.5 )
-        totNewReward, newVis = self.computeAllrewards(optionpos,newRwNovelty*(1 + self.epsilon*noise))
-
-        if totNewReward - totCurrentReward > 0 :
+        if best_reward - totCurrentReward > 0:
             self.model.new_place(self, optionpos)
-            self.visibility = newVis
+            self.visibility = best_vis
         else:
-            self.visibility = currenVis
+            self.visibility = currentVis
 
-            
         self.model.Farm(self.pos) #farming also updates AvgAgentKnowledge
         
         self.age += 1
