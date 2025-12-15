@@ -97,9 +97,9 @@ class Scientist(mesa.Agent):
         currentRwNovelty = self.model.computeKnowledge(self.pos)
         totCurrentReward, currentVis = self.computeAllrewards(self.pos, currentRwNovelty)
 
-        best_reward = float('-inf')
+        best_reward = totCurrentReward
         optionpos = self.pos  # fallback to current position
-        best_vis = self.visibility
+        best_vis = currentVis
 
         for neighbor in neighbors_nodes:
             neighborRwNovelty = self.model.computeKnowledge(neighbor)
