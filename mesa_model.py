@@ -199,6 +199,10 @@ class MyModel(mesa.Model):
                              "mean_prestige": lambda m: m.agents.agg("prestige", np.mean),
                              "mean_vanishing_prestige": lambda m:  m.agents.agg("prestige_vanishing", np.mean),
                              "mean_visibility_prestige": lambda m:  m.agents.agg("prestige_visibility", np.mean),
+                             "top1pct_prestige_share": lambda m: (np.sum([a.prestige for a in m.agents if a.prestige >= np.percentile([ag.prestige for ag in m.agents], 99)]) / np.sum([a.prestige for a in m.agents])
+                             if np.sum([a.prestige for a in m.agents]) > 0 else 0),
+                             "top10pct_prestige_share": lambda m: (np.sum([a.prestige for a in m.agents if a.prestige >= np.percentile([ag.prestige for ag in m.agents], 90)]) / np.sum([a.prestige for a in m.agents])
+                             if np.sum([a.prestige for a in m.agents]) > 0 else 0),
                              "avgcurrentAgentKnowledge": lambda m: m.avgcurrentAgentKnowledge,
                              "explored_percentage": lambda m: m.explored_percentage,
                              "explored_weighted_by_initial_knowledge": lambda m: m.explored_weighted_by_initial_knowledge,
