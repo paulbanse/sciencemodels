@@ -65,6 +65,7 @@ class Scientist(mesa.Agent):
     def incrPrestige(self, value):
         self.prestige += value
         self.prestige_visibility += value**(1-self.curiosity) * self.visibility **(self.curiosity)
+        # should not the logic of the above equation be inverted? lets maybe thing again whether we need and how we use the prestige_visibility?
         x = self.model.vanishing_factor_for_prestige
         if x != 1:
             temp = self.prestige_vanishing 
@@ -83,8 +84,10 @@ class Scientist(mesa.Agent):
         avgAgentDistance = np.mean([a.computeDistance(pos) for a in self.model.agents if a != self])
         avgAllDistance = self.model.agent_avg_distance
         visibility = (avgAllDistance+1)/(avgAgentDistance+1)
+        # differentiate between visibility of a field vs. visibility of an agent? would not this formulation stay constant across neihbouring cells?
         if self.model.use_visibility_reward:
             reward = Novelty ** (self.curiosity)* visibility**(1-self.curiosity)
+        # currently we use only the above. however, we could employ three options: (1) the above, where I am dragged towards others, (2) an alternative version, where closeness of others impacts on the attractiveness of grids, (3) some version of either (1) or (2) where the pull effect is weighted by prestige
         else:
             reward = self.curiosity * Novelty/ self.model.avgcurrentAgentKnowledge + (1-self.curiosity) * visibility
         return reward, visibility
