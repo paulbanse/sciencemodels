@@ -64,8 +64,8 @@ class Scientist(mesa.Agent):
 
     def incrPrestige(self, value):
         self.prestige += value
-        self.prestige_visibility += value**(1-self.curiosity) * self.visibility **(self.curiosity)
-        # should not the logic of the above equation be inverted? lets maybe thing again whether we need and how we use the prestige_visibility?
+        self.prestige_visibility += np.mean([value**(a.curiosity) * self.visibility **(1-a.curiosity) for a in self.model.agents if a != self])
+        # idea: we could also use individual distances instead of agent's visibility in the above specification.
         x = self.model.vanishing_factor_for_prestige
         if x != 1:
             temp = self.prestige_vanishing 
