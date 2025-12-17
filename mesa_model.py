@@ -84,12 +84,20 @@ class Scientist(mesa.Agent):
         avgAgentDistance = np.mean([a.computeDistance(pos) for a in self.model.agents if a != self])
         avgAllDistance = self.model.agent_avg_distance
         visibility = (avgAllDistance+1)/(avgAgentDistance+1)
-        # differentiate between visibility of a field vs. visibility of an agent? (would not this formulation stay constant across neihbouring cells?; answer: no, it won't)
-        if self.model.use_visibility_reward:
-            reward = (Novelty/self.model.avgcurrentAgentKnowledge) ** (self.curiosity)* visibility**(1-self.curiosity)
-        # currently we use only the above. however, we could employ three options: (1) the above, where I am dragged towards others, (2) an alternative version, where closeness of others impacts on the attractiveness of grids, (3) some version of either (1) or (2) where the pull effect is weighted by prestige
+        if sum([a.prestige_vanishing for a in self.model.agents if a != self]) == 0:
+            avgAgentDistanceP = avgAgentDistance
         else:
-            reward = self.curiosity * Novelty/ self.model.avgcurrentAgentKnowledge + (1-self.curiosity) * visibility
+            avgAgentDistanceP = np.average([a.computeDistance(pos) for a in self.model.agents if a != self],
+                                       weights=[a.prestige_vanishing for a in self.model.agents if a != self])
+        visibilityP = (avgAllDistance+1)/(avgAgentDistanceP+1)
+        # differentiate between visibility of a field vs. visibility of an agent? (would not this formulation stay constant across neihbouring cells?; answer: no, it won't)
+        if self.model.use_visibility_reward == False:
+            reward = (Novelty/self.model.avgcurrentAgentKnowledge)**(self.curiosity) * visibility**(1-self.curiosity)
+        else:
+            reward = (Novelty/self.model.avgcurrentAgentKnowledge)**(self.curiosity) * (visibilityP)**(1-self.curiosity)
+        # currently we use only the above. however, we could employ three options: (1) the above, where I am dragged towards others, (2) an alternative version, where closeness of others impacts on the attractiveness of grids, (3) some version of either (1) or (2) where the pull effect is weighted by prestige
+        # else:
+        #    reward = self.curiosity * Novelty/ self.model.avgcurrentAgentKnowledge + (1-self.curiosity) * visibility
         return reward, visibility
     
 
