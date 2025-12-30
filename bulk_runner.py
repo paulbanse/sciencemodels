@@ -64,7 +64,7 @@ all_params = {'n_agents':20,             # minimum 3
               "use_visibility_reward": True,
               }
 
-filename = "data/testrun_visibilityReward_" + "_".join([f"{key}{value}" for key, value in generation_params.items()]) + ".csv"
+filename = "data/testrun_corr-prestige-merit_" + "_".join([f"{key}{value}" for key, value in generation_params.items()]) + ".csv"
 print(filename, generation_params)
 mesa_model.generate_data_parametric_exploration(filename, param_grid = all_params, repeats_per_setting = 40, change_landscape_seed = True, intention = "w", skip_to = 0)
 

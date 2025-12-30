@@ -48,6 +48,7 @@ class Scientist(mesa.Agent):
         self.lastTileKnowledge = 0
         self.model = model
         self.visibility = 0
+        self.current_localMerit = 0
 
 
     def computeDistance(self,otherAgentPos):
@@ -100,7 +101,17 @@ class Scientist(mesa.Agent):
         #    reward = self.curiosity * Novelty/ self.model.avgcurrentAgentKnowledge + (1-self.curiosity) * visibility
         return reward, visibility
     
+    def localMerit(self, pos):
+        # Get the four direct neighbors
+        neighbors = self.model.grid.get_neighborhood(pos, moore=False, include_center=False)
+        # Get knowledge values for all positions (center + neighbors)
+        knowledge_values = [self.model.computeKnowledge(pos)]  # center position
 
+        for neighbor_pos in neighbors:
+            knowledge_values.append(self.model.computeKnowledge(neighbor_pos))
+        # Return the average
+        return np.mean(knowledge_values)
+    
     def step(self):
         '''pick a random node and check if according to the agent preference it is better to move to that node'''
         neighbors_nodes = self.model.grid.get_neighborhood(self.pos, moore = False, include_center=False)
@@ -222,10 +233,12 @@ class MyModel(mesa.Model):
                              "best_knowledge": lambda m: np.max(m.grid.properties["knowledge"].data),
                              "avg_distance_between_agents": lambda m: m.agent_avg_distance,
                              "percentage_knowledge_harvested": lambda m: m.percentage_knowledge_harvested,
-                             },
+                             "corr_prestige_localMerit": lambda m: (np.corrcoef([a.prestige for a in m.agents],[a.current_localMerit for a in m.agents])[0, 1] if len(m.agents) > 1 and np.std([a.prestige for a in m.agents]) > 0 and np.std([a.current_localMerit for a in m.agents]) > 0 else 0)
+                            },
             agent_reporters={"prestige":   "prestige",
                              "lastTileKnowledge": "lastTileKnowledge",
-                             'curiosity': "curiosity"
+                             'curiosity': "curiosity",                  
+                             "localMerit": "current_localMerit"
                              })
         self.endLoopUpdate()
 
@@ -275,10 +288,13 @@ class MyModel(mesa.Model):
                 self.grid.place_agent(a, coords)
             for agent in self.agents:
                 self.grid.properties["explored"].data[agent.pos] = True
+                agent.current_localMerit = agent.localMerit(agent.pos)
         self.explored_percentage = np.sum(self.grid.properties["explored"].data)/(self.size**2)
         self.explored_weighted_by_initial_knowledge = np.sum(self.grid.properties["explored"].data * (self.grid.properties["initial_knowledge"].data))/self.totalInitialKnowledge
         self.agent_avg_distance = np.mean([ np.mean([a.computeDistance(b.pos) for b in self.agents if a != b]) for a in self.agents])
         self.percentage_knowledge_harvested = (self.totalInitialKnowledge - np.sum(self.grid.properties["knowledge"].data))/self.totalInitialKnowledge
+        for agent in self.agents:
+                agent.current_localMerit = agent.localMerit(agent.pos)
 
         self.datacollector.collect(self)
         if self.explored_50_step == self._default_steps_thresholds and self.explored_percentage >= 0.5: 
@@ -442,7 +458,8 @@ class MyModel(mesa.Model):
         if end_report_file != "":
             a = self.datacollector.get_model_vars_dataframe().iloc[-1].to_dict()
             b = {k: self.__getattribute__(k) for k in self.__dict__ if (type(self.__getattribute__(k)) in [int,float,str,list, dict] and k[0] != '_') }
-            row = {**a, **b}
+            c = {"mean_corr_prestige_localMerit": self.datacollector.get_model_vars_dataframe()["corr_prestige_localMerit"].mean()}
+            row = {**a, **b, **c}
             needs_header = not(is_non_zero_file(end_report_file))
             with open(end_report_file, 'a') as f:
                 writer = csv.writer(f)
@@ -458,9 +475,9 @@ class MyModel(mesa.Model):
 
             a = self.datacollector.get_model_vars_dataframe().iloc[-1].to_dict()
             b = {k: self.__getattribute__(k) for k in self.__dict__ if (type(self.__getattribute__(k)) in [int,float,str,list, dict] and k[0] != '_') }
-            row = {**a, **b}
+            c = {"mean_corr_prestige_localMerit": self.datacollector.get_model_vars_dataframe()["corr_prestige_localMerit"].mean()}
+            row = {**a, **b, **c}
             return row
-
 
 def plot_normalized_values(csv_name, size):
     modeldf = pd.read_csv("model_"+csv_name+".csv")
