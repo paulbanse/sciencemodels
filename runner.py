@@ -7,7 +7,7 @@ import numpy as np
 
 #example of generation params for landscapefunctions.multipleGaussians : 
 
-chosen_setup = 1 # 0 for randominit, 1 for 2 gaussians, 2 for 6 gaussians, 3 for noisy gaussian
+chosen_setup = 3 # 0 for randominit, 1 for 2 gaussians, 2 for 6 gaussians, 3 for noisy gaussian
 generation_params = {}
 generation_function =landscapefunctions.randominit
 
@@ -24,7 +24,7 @@ match chosen_setup:
         generation_function = landscapefunctions.multipleGaussians
         generation_params = {'seed': 4, 
                             "std": 5, 
-                            "number_gaussians": 6}
+                            "number_gaussians": 4}
     case 3:
         generation_function = landscapefunctions.noisyGaussian
         generation_params = {'prop_random': 5,
@@ -57,4 +57,4 @@ all_params = {'n_agents':20,             # minimum 3
 model = mesa_model.MyModel(**all_params)
 
 
-model.animate_steps(dynamic_plot=True, csv_name="",end_report_file='')# csv_name="data_randominit",end_report_file='end_report.csv')
+model.animate_steps(dynamic_plot=False, csv_name="long_NGauss",end_report_file='')# csv_name="data_randominit",end_report_file='end_report.csv')
