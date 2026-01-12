@@ -7,16 +7,11 @@ import matplotlib.animation as animation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import itertools
 from matplotlib import cm
-from matplotlib.ticker import LinearLocator
 import csv
 # self.model.grid.move_agent(self, new_position)
 import threading
 import pandas as pd
-from pandas import DataFrame
 import os
-from copy import deepcopy
-from itertools import product
-import warnings
 
 pause = False
 
@@ -149,14 +144,20 @@ class Scientist(mesa.Agent):
 
 class MyModel(mesa.Model):
     def __init__(self, n_agents, n_connection, initial_curiosity, epsilon, harvest, sizeGrid, 
-                 initCellFunc, use_distance, generation_params = {"seed" :0}, 
-                 agent_generation_rate = -1, constant_population = 1, agent_seed = 0,step_limit = 400, AgentGenerationFunc = lambda cur,seed: cur, vanishing_factor_for_prestige = 0, use_visibility_reward = True):
+                 initCellFunc, use_distance, 
+                 generation_params = {"seed" :0}, 
+                 agent_generation_rate = -1, 
+                 new_questions = 0,
+                 agent_seed = 0,step_limit = 400,
+                 AgentGenerationFunc = lambda cur,seed,params: cur,
+                 vanishing_factor_for_prestige = 0,
+                 use_visibility_reward = True):
         ''' parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc '''
         super().__init__()
         self.number_connection = n_connection
         self.number_agents = n_agents
         self.agent_generation = agent_generation_rate
-        self.constant_population = constant_population
+        self.new_questions = new_questions
         self.size = sizeGrid
         self.steps = 0
         self.harvest = harvest
@@ -192,13 +193,19 @@ class MyModel(mesa.Model):
             print("Agents will NOT use distance information when choosing where to go, curiosity and noise will have similar effects")
 
         self._seed = agent_seed
+        
         for posX,posY in list(itertools.product(range(sizeGrid), range(sizeGrid))):
             initial_value = initCellFunc(posX,posY, sizeGrid, generation_params)
             self.grid.properties["knowledge"].data[posX,posY] = initial_value
             self.totalInitialKnowledge += initial_value
-
+        min_knowledge, max_knowledge = np.min(self.grid.properties["knowledge"].data), np.max(self.grid.properties["knowledge"].data)
         for posX,posY in list(itertools.product(range(sizeGrid), range(sizeGrid))):
-            self.grid.properties["knowledge"].data[posX,posY] = self.grid.properties["knowledge"].data[posX,posY]/self.totalInitialKnowledge
+            val = self.grid.properties["knowledge"].data[posX,posY]
+            if self.new_questions == 0:
+                self.grid.properties["knowledge"].data[posX,posY] = val /self.totalInitialKnowledge
+            if self.new_questions > 0:
+                self.grid.properties["knowledge"].data[posX,posY] = (val - min_knowledge)/(max_knowledge - min_knowledge) * 0.95 + 0.05
+                
             self.grid.properties["initial_knowledge"].data[posX,posY] = self.grid.properties["knowledge"].data[posX,posY]
             self.grid.properties["explored"].data[posX,posY] = False
         self.totalInitialKnowledge = 1
@@ -212,6 +219,7 @@ class MyModel(mesa.Model):
             a.age = self.rng.randint(23,50)
             self.grid.place_agent(a, coords)
             a.lastTileKnowledge = self.grid.properties["knowledge"].data[coords]
+            a.current_localMerit = a.localMerit(a.pos)
 
         
         self.updateknowledge()
@@ -233,9 +241,11 @@ class MyModel(mesa.Model):
                              "best_knowledge": lambda m: np.max(m.grid.properties["knowledge"].data),
                              "avg_distance_between_agents": lambda m: m.agent_avg_distance,
                              "percentage_knowledge_harvested": lambda m: m.percentage_knowledge_harvested,
-                             "corr_prestige_localMerit": lambda m: (np.corrcoef([a.prestige for a in m.agents],[a.current_localMerit for a in m.agents])[0, 1] if len(m.agents) > 1 and np.std([a.prestige for a in m.agents]) > 0 and np.std([a.current_localMerit for a in m.agents]) > 0 else 0)
+                             "corr_prestige_localMerit": lambda m: (np.corrcoef([a.prestige for a in m.agents],[a.current_localMerit for a in m.agents])[0, 1] if  np.std([a.prestige for a in m.agents]) > 0 and np.std([a.current_localMerit for a in m.agents]) > 0 else 0)
                             },
             agent_reporters={"prestige":   "prestige",
+                             "prestige_vanishing":   "prestige_vanishing",
+                             "prestige_visibility":   "prestige_visibility",
                              "lastTileKnowledge": "lastTileKnowledge",
                              'curiosity': "curiosity",                  
                              "localMerit": "current_localMerit"
@@ -281,14 +291,17 @@ class MyModel(mesa.Model):
                         supervisors.append(a)
                         break
                     val -= p
-
             for sup in supervisors:    
                 a = Scientist(self, self.initial_curiosity,self.epsilon)
                 coords = sup.pos
                 self.grid.place_agent(a, coords)
             for agent in self.agents:
                 self.grid.properties["explored"].data[agent.pos] = True
-                agent.current_localMerit = agent.localMerit(agent.pos)
+        if self.new_questions > 0:
+            occupied_pos = list(set([ agent.pos for agent in self.agents]))
+            for posX,posY in occupied_pos:
+                if self.grid.properties["knowledge"].data[posX,posY] < 0.025:
+                    self.grid.properties["knowledge"].data[posX,posY] = self.rng.random()
         self.explored_percentage = np.sum(self.grid.properties["explored"].data)/(self.size**2)
         self.explored_weighted_by_initial_knowledge = np.sum(self.grid.properties["explored"].data * (self.grid.properties["initial_knowledge"].data))/self.totalInitialKnowledge
         self.agent_avg_distance = np.mean([ np.mean([a.computeDistance(b.pos) for b in self.agents if a != b]) for a in self.agents])
@@ -376,7 +389,10 @@ class MyModel(mesa.Model):
             cax = div.append_axes('right', '5%', '5%')
             div2 = make_axes_locatable(ax3)
             cax2 = div2.append_axes('right', '5%', '5%')
-            im = ax.imshow(epistemicGrid)#, vmin=0, vmax=1)
+            if self.new_questions > 0:
+                im = ax.imshow(epistemicGrid, vmin=0, vmax=1)
+            else:
+                im = ax.imshow(epistemicGrid)#, vmin=0, vmax=1)
             im= ax3.imshow(self.computeDistanceToAgents())#, vmin=0, vmax=2*self.size)
             ax3.set_title('Distance to all agents')
             ax2.set_title('Measures over time')
@@ -435,6 +451,7 @@ class MyModel(mesa.Model):
                     scat.set_clim(vmin=min(PosAge), vmax=max(PosAge))
                     
                     epistemicGrid = self.grid.properties["knowledge"].data
+                    
                     im = ax.imshow(epistemicGrid)
                     cbar = ax.figure.colorbar(im, cax=cax)
                     im= ax3.imshow(self.computeDistanceToAgents())
@@ -442,8 +459,6 @@ class MyModel(mesa.Model):
 
                 if self.step_limit == frame+1 and dynamic_plot:
                     threading.Timer(0.1, lambda: plt.close(fig)).start()  # 👈 Delayed close
-
-
 
         if dynamic_plot:
             ani = animation.FuncAnimation(fig=fig, func=update, frames=range(self.step_limit), interval=200)
@@ -453,65 +468,41 @@ class MyModel(mesa.Model):
                 update(k)
 
         if csv_name != "":
-            self.datacollector.get_agent_vars_dataframe().to_csv("agent_"+csv_name+".csv")
-            self.datacollector.get_model_vars_dataframe().to_csv("model_"+csv_name+".csv")
+            self.datacollector.get_agent_vars_dataframe().to_csv("data/agent_"+csv_name+".csv")
+            self.datacollector.get_model_vars_dataframe().to_csv("data/model_"+csv_name+".csv")
+            print("data saved to ", "agent_"+csv_name+".csv", "model_"+csv_name+".csv")
         if end_report_file != "":
             a = self.datacollector.get_model_vars_dataframe().iloc[-1].to_dict()
             b = {k: self.__getattribute__(k) for k in self.__dict__ if (type(self.__getattribute__(k)) in [int,float,str,list, dict] and k[0] != '_') }
             c = {"mean_corr_prestige_localMerit": self.datacollector.get_model_vars_dataframe()["corr_prestige_localMerit"].mean()}
             row = {**a, **b, **c}
-            needs_header = not(is_non_zero_file(end_report_file))
-            with open(end_report_file, 'a') as f:
+            needs_header = not(is_non_zero_file("data/"+end_report_file))
+            with open("data/"+end_report_file, 'a') as f:
                 writer = csv.writer(f)
                 if needs_header:
                     writer.writerow(sorted(row.keys()))
                 row = [row[k] for k in sorted(row.keys())]
                 writer.writerow(row)
+            print("end report saved to ", end_report_file)
         del self
 
-    def run_mode_for_bulk(self):
+    def run_mode_for_bulk(self, longitudinal = False):
             for k in range(self.step_limit):
                 self.step(True)
 
-            a = self.datacollector.get_model_vars_dataframe().iloc[-1].to_dict()
-            b = {k: self.__getattribute__(k) for k in self.__dict__ if (type(self.__getattribute__(k)) in [int,float,str,list, dict] and k[0] != '_') }
-            c = {"mean_corr_prestige_localMerit": self.datacollector.get_model_vars_dataframe()["corr_prestige_localMerit"].mean()}
-            row = {**a, **b, **c}
-            return row
-
-def plot_normalized_values(csv_name, size):
-    modeldf = pd.read_csv("model_"+csv_name+".csv")
-    agentdf = pd.read_csv("agent_"+csv_name+".csv")
-    fig, ax = plt.subplots(figsize=(7, 5))
-    ax.plot(modeldf['Step'], modeldf['explored_percentage'], label = 'exploration percentage')
-    ax.plot(modeldf['Step'], modeldf['avg_knowledge']/modeldf['best_knowledge'], label = 'Avg Map / Best Tile')
-    ax.plot(modeldf['Step'], modeldf['avgcurrentAgentKnowledge']/modeldf['best_knowledge'], label = 'Avg Agent / Best Tile')
-    ax.plot(modeldf['Step'], modeldf['avg_distance_between_agents']/size*(2)**(1/2), label = 'Avg Distance / max distance')
-    ax.legend()
-    plt.show()
-
-def plot_tileknowledge_per_prestige():
-    agentdf = pd.read_csv("agent_data.csv")
-    fig, ax = plt.subplots(figsize=(7, 5))
-    plt.title("agents tile vs their prestige")
-    #normalize lastTileKnowledge by the best knowledge in the model on the same step
-    modeldf = pd.read_csv("model_data.csv")
-    best_knowledge_per_step = dict(zip(modeldf['Step'], modeldf['best_knowledge']))
-    agentdf['lastTileKnowledge_normalized'] = agentdf.apply(lambda row: row['lastTileKnowledge']/best_knowledge_per_step[row['Step']], axis=1)
-    ax.scatter(agentdf['prestige'], agentdf['lastTileKnowledge_normalized'], alpha = 0.5, c = agentdf['Step'], cmap = 'viridis')
-    cbar = plt.colorbar(cm.ScalarMappable(cmap='viridis'), ax=ax)
-    cbar.set_ticks([k/10 for k in range(10)])
-    max_step = max(agentdf['Step'])
-    if max_step > 10:
-        cbar.ax.set_yticklabels([k* (max_step//10) for k in range(10)])
+            if longitudinal == False:
+                a = self.datacollector.get_model_vars_dataframe().iloc[-1].to_dict()
+                b = {k: self.__getattribute__(k) for k in self.__dict__ if (type(self.__getattribute__(k)) in [int,float,str,list, dict] and k[0] != '_') }
+                c = {"mean_corr_prestige_localMerit": self.datacollector.get_model_vars_dataframe()["corr_prestige_localMerit"].mean()}
+                row = {**a, **b, **c}
+                return row
+            else:
+                return self.datacollector.get_model_vars_dataframe()
     
-    cbar.set_label('Step')
-    ax.set_xlabel('Prestige')
-    ax.set_ylabel('Agent Tile Knowledge/Best Tile Knowledge')
-    plt.show()
-        
 
-def generate_data_parametric_exploration(filename, param_grid, repeats_per_setting = 10, change_landscape_seed = False, intention = "w", skip_to = 0):
+
+
+def generate_data_parametric_exploration(filename, param_grid, repeats_per_setting = 10, change_landscape_seed = False, intention = "w", skip_to = 0, longitudinal = False):
     import itertools
     param_as_lists =  [a for a in param_grid.keys() if type(param_grid[a]) == list]
     varying_params = [a for a in param_as_lists if len(param_grid[a]) > 1]
@@ -527,9 +518,12 @@ def generate_data_parametric_exploration(filename, param_grid, repeats_per_setti
     if skip_to > 0:
         param_range = range(skip_to-1, skip_to )
         print("skipping to", skip_to, "out of", len(param_combinations))
-    print(filename, intention)
-    needs_header = not(is_non_zero_file(filename))
-    with open(filename, intention) as f:
+
+
+    if not(longitudinal):
+        print(filename + ".csv", intention)
+        needs_header = not(is_non_zero_file(filename))
+        f = open(filename + ".csv", intention)
         writer = csv.writer(f)
         if needs_header or intention == "w":
             #create a dummy model to get the header
@@ -540,17 +534,29 @@ def generate_data_parametric_exploration(filename, param_grid, repeats_per_setti
             row = model.run_mode_for_bulk()
             writer.writerow(sorted(row.keys()))
             del model
-        
-        for idx in param_range:
-            param_set = param_combinations[idx]
-            all_params = {param_names[i]: param_set[i] for i in range(len(param_names))}
+    
+    if longitudinal:
+        os.makedirs(filename, exist_ok=True)
+        f = open(f"{filename}/" +"fixed_params.txt", "w")
+        f.write(str({k: param_grid[k] for k in param_grid.keys() if k not in varying_params}))
+        f.close()
 
-            print("now processing param set ", idx+1, "out of", len(param_combinations))
-            for repeat in range(repeats_per_setting):
-                all_params["agent_seed"] = repeat 
-                if change_landscape_seed:
-                    all_params["generation_params"] = all_params.get("generation_params", {}) | {"seed": repeat}
-                model = MyModel(**all_params)
-                row = model.run_mode_for_bulk()
+
+
+    for idx in param_range:
+        param_set = param_combinations[idx]
+        all_params = {param_names[i]: param_set[i] for i in range(len(param_names))}
+
+        print("now processing param set ", idx+1, "out of", len(param_combinations))
+        for repeat in range(repeats_per_setting):
+            all_params["agent_seed"] = repeat 
+            if change_landscape_seed:
+                all_params["generation_params"] = all_params.get("generation_params", {}) | {"seed": repeat}
+            model = MyModel(**all_params)
+            row = model.run_mode_for_bulk(longitudinal=longitudinal)
+            if longitudinal:
+                row.to_csv(f"{filename}/run_" + "_".join([f"{key}{value}" for key, value in all_params.items() if key in varying_params + ['agent_seed']])+'.csv', index=False)
+            else:
                 writer.writerow([row[k] for k in sorted(row.keys())])
-                del model
+            del model
+    f.close()

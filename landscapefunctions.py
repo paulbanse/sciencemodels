@@ -60,3 +60,5 @@ def beta(mu, seed, params):
     else:
         return mu
 
+def uniform(mu, seed, params):
+    return random.Random(seed).uniform(0,1)
