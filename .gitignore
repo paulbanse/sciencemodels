@@ -8,10 +8,14 @@
 # versioniert werden.
 # -----------------------------------------------------------
 
+
+
 # 🐍 Virtuelle Umgebungen (lokale Python-Installationen)
 venv/
 ifsoC/
 .venv/
+pyrightconfig.json
+ruff.toml
 
 # 🐍 Automatisch erzeugte Python-Cache-Dateien
 __pycache__/

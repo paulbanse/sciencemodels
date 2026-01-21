@@ -1,6 +1,6 @@
+from __future__ import annotations
 from mesa.space import Coordinate, PropertyLayer
 import mesa
-import random
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -44,6 +44,7 @@ class Scientist(mesa.Agent):
     visibility: np.float64
     current_localMerit: np.float64
     pos: Coordinate
+    lastTileKnowledge: np.float64
 
     def __init__(self, model, curiosity, epsilon):
         super().__init__(model)
@@ -196,6 +197,17 @@ class Scientist(mesa.Agent):
 
 
 class MyModel(mesa.Model):
+    number_connection: int
+    number_agents: int
+    agent_generation: int
+    new_questions: bool
+    size: int
+    steps: int
+    harvest: np.float64
+    initial_curiosity: np.float64
+    epsilon: np.float64
+    use_distance: bool
+
     def __init__(
         self,
         n_agents,
@@ -208,7 +220,7 @@ class MyModel(mesa.Model):
         use_distance,
         generation_params={"seed": 0},
         agent_generation_rate=-1,
-        new_questions=0,
+        new_questions=False,
         agent_seed=0,
         step_limit=400,
         AgentGenerationFunc=lambda cur, seed, params: cur,
@@ -229,11 +241,17 @@ class MyModel(mesa.Model):
         self.use_distance = use_distance
         self.grid = mesa.space.MultiGrid(sizeGrid, sizeGrid, torus=True)
         self.grid.add_property_layer(
-            PropertyLayer("knowledge", sizeGrid, sizeGrid, 0.0, dtype=np.float64)
+            PropertyLayer(
+                "knowledge", sizeGrid, sizeGrid, np.float64(0.0), dtype=np.float64
+            )
         )
         self.grid.add_property_layer(
             PropertyLayer(
-                "initial_knowledge", sizeGrid, sizeGrid, 0.0, dtype=np.float64
+                "initial_knowledge",
+                sizeGrid,
+                sizeGrid,
+                np.float64(0.0),
+                dtype=np.float64,
             )
         )
         self.grid.add_property_layer(
@@ -280,11 +298,11 @@ class MyModel(mesa.Model):
         )
         for posX, posY in list(itertools.product(range(sizeGrid), range(sizeGrid))):
             val = self.grid.properties["knowledge"].data[posX, posY]
-            if self.new_questions == 0:
+            if not self.new_questions:
                 self.grid.properties["knowledge"].data[posX, posY] = (
                     val / self.totalInitialKnowledge
                 )
-            if self.new_questions > 0:
+            else:
                 self.grid.properties["knowledge"].data[posX, posY] = (
                     val - min_knowledge
                 ) / (max_knowledge - min_knowledge) * 0.95 + 0.05
@@ -377,7 +395,11 @@ class MyModel(mesa.Model):
 
     def updateknowledge(self):
         self.avgcurrentAgentKnowledge = np.mean(
-            [agent.lastTileKnowledge for agent in self.agents]
+            [
+                agent.lastTileKnowledge
+                for agent in self.agents
+                if isinstance(agent, Scientist)
+            ]
         )
 
     def new_place(self, agent1, coords, newAgent=False):
@@ -406,8 +428,10 @@ class MyModel(mesa.Model):
         if self.agent_generation > 0:
             prevNew = int((self.steps - 1) // self.agent_generation)
             newNew = int(self.steps // self.agent_generation)
-            ListPA = [(a.prestige, a) for a in self.agents]
-            totalPrestige = sum([a.prestige for a in self.agents])
+            ListPA = [(a.prestige, a) for a in self.agents if isinstance(a, Scientist)]
+            totalPrestige = sum(
+                [a.prestige for a in self.agents if isinstance(a, Scientist)]
+            )
             supervisors = []
             for k in range(prevNew, newNew):
                 val = self.rng.uniform(0, totalPrestige)
@@ -422,7 +446,7 @@ class MyModel(mesa.Model):
                 self.grid.place_agent(a, coords)
             for agent in self.agents:
                 self.grid.properties["explored"].data[agent.pos] = True
-        if self.new_questions > 0:
+        if self.new_questions:
             occupied_pos = list(set([agent.pos for agent in self.agents]))
             for posX, posY in occupied_pos:
                 if self.grid.properties["knowledge"].data[posX, posY] < 0.025:
@@ -443,13 +467,15 @@ class MyModel(mesa.Model):
             [
                 np.mean([a.computeDistance(b.pos) for b in self.agents if a != b])
                 for a in self.agents
+                if isinstance(a, Scientist)
             ]
         )
         self.percentage_knowledge_harvested = (
             self.totalInitialKnowledge - np.sum(self.grid.properties["knowledge"].data)
         ) / self.totalInitialKnowledge
         for agent in self.agents:
-            agent.current_localMerit = agent.localMerit(agent.pos)
+            if isinstance(agent, Scientist):
+                agent.current_localMerit = agent.localMerit(agent.pos)
 
         self.datacollector.collect(self)
         if (
@@ -485,7 +511,7 @@ class MyModel(mesa.Model):
 
     def step(self, endupdate=True):
         # compute everything and let agents take the decision
-        temp = self.agents.select(lambda a: type(a) == Scientist)
+        temp = self.agents.select(lambda a: isinstance(a, Scientist))
         temp.random = self.rng
         temp.shuffle_do("step")
         if endupdate:
@@ -557,7 +583,7 @@ class MyModel(mesa.Model):
             cax = div.append_axes("right", "5%", "5%")
             div2 = make_axes_locatable(ax3)
             cax2 = div2.append_axes("right", "5%", "5%")
-            if self.new_questions > 0:
+            if self.new_questions:
                 im = ax.imshow(epistemicGrid, vmin=0, vmax=1)
             else:
                 im = ax.imshow(epistemicGrid)  # , vmin=0, vmax=1)
@@ -801,4 +827,3 @@ def generate_data_parametric_exploration(
                 writer.writerow([row[k] for k in sorted(row.keys())])
             del model
     f.close()
-
