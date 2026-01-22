@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Any, Callable
 from mesa.space import Coordinate, PropertyLayer
 import mesa
 import numpy as np
@@ -12,6 +13,8 @@ import csv
 # self.model.grid.move_agent(self, new_position)
 import threading
 import os
+
+from numpy.random import Generator
 
 pause = False
 
@@ -93,16 +96,23 @@ class Scientist(mesa.Agent):
         else:
             self.prestige_vanishing += value
 
-    def compute_all_rewards(self, pos, novelty):
+    def compute_all_rewards(
+        self, pos: Coordinate, novelty: np.float64
+    ) -> tuple[np.float64, np.float64]:
         """This part is just a test, we change the network reward by just the avg distance of
         all agents divided the average distance of the current agent"""
         if not self.model.use_distance:
-            return self.curiosity * novelty / self.model.avgcurrentAgentKnowledge, 0
-        avg_agent_distance = np.mean(
-            [a.compute_distance(pos) for a in self.model.scientists if a != self]
+            return (
+                self.curiosity * novelty / self.model.avg_current_agent_knowledge,
+                np.float64(0.0),
+            )
+        avg_agent_distance = np.float64(
+            np.mean(
+                [a.compute_distance(pos) for a in self.model.scientists if a != self]
+            )
         )
         avg_all_distance = self.model.agent_avg_distance
-        visibility = (avg_all_distance + 1) / (avg_agent_distance + 1)
+        visibility = (avg_all_distance + 1.0) / (avg_agent_distance + 1.0)
         if sum([a.prestige_vanishing for a in self.model.scientists if a != self]) == 0:
             avg_agent_distance_p = avg_agent_distance
         else:
@@ -115,11 +125,11 @@ class Scientist(mesa.Agent):
         visibility_p = (avg_all_distance + 1) / (avg_agent_distance_p + 1)
         # differentiate between visibility of a field vs. visibility of an agent? (would not this formulation stay constant across neihbouring cells?; answer: no, it won't)
         if not self.model.use_visibility_reward:
-            reward = (novelty / self.model.avgcurrentAgentKnowledge) ** (
+            reward = (novelty / self.model.avg_current_agent_knowledge) ** (
                 self.curiosity
             ) * visibility ** (1 - self.curiosity)
         else:
-            reward = (novelty / self.model.avgcurrentAgentKnowledge) ** (
+            reward = (novelty / self.model.avg_current_agent_knowledge) ** (
                 self.curiosity
             ) * (visibility_p) ** (1 - self.curiosity)
 
@@ -165,7 +175,7 @@ class Scientist(mesa.Agent):
 
         for neighbor in neighbors_nodes:
             neighbor_rw_novelty = self.model.compute_knowledge(neighbor)
-            noise = 2 * (self.model.rng.random() - 0.5)
+            noise = 2.0 * (self.model.rng.random() - 0.5)
             total_reward, visibility = self.compute_all_rewards(
                 neighbor, neighbor_rw_novelty * (1 + self.epsilon * noise)
             )
@@ -202,6 +212,74 @@ class MyModel(mesa.Model):
     epsilon: np.float64
     use_distance: bool
     scientists: list[Scientist]
+    total_initial_knowledge: np.float64
+
+    def __init_grid(
+        self, cell_init_function: Callable[[int, int, int, Any, Generator], np.float64]
+    ):
+        self.grid = mesa.space.MultiGrid(self.size, self.size, torus=True)
+        self.grid.add_property_layer(
+            PropertyLayer(
+                "knowledge", self.size, self.size, np.float64(0.0), dtype=np.float64
+            )
+        )
+        self.grid.add_property_layer(
+            PropertyLayer(
+                "initial_knowledge",
+                self.size,
+                self.size,
+                np.float64(0.0),
+                dtype=np.float64,
+            )
+        )
+        self.grid.add_property_layer(
+            PropertyLayer("explored", self.size, self.size, False, dtype=bool)
+        )
+
+        for pos_x, pos_y in list(itertools.product(range(self.size), range(self.size))):
+            initial_value = cell_init_function(
+                pos_x, pos_y, self.size, self.generation_params, self.rng
+            )
+            self.grid.properties["knowledge"].data[pos_x, pos_y] = initial_value
+            self.total_initial_knowledge += initial_value
+
+        min_knowledge, max_knowledge = (
+            np.min(self.grid.properties["knowledge"].data),
+            np.max(self.grid.properties["knowledge"].data),
+        )
+
+        for pos_x, pos_y in list(itertools.product(range(self.size), range(self.size))):
+            val = self.grid.properties["knowledge"].data[pos_x, pos_y]
+            if not self.new_questions:
+                self.grid.properties["knowledge"].data[pos_x, pos_y] = (
+                    val / self.total_initial_knowledge
+                )
+            else:
+                self.grid.properties["knowledge"].data[pos_x, pos_y] = (
+                    val - min_knowledge
+                ) / (max_knowledge - min_knowledge) * 0.95 + 0.05
+
+            self.grid.properties["initial_knowledge"].data[pos_x, pos_y] = (
+                self.grid.properties["knowledge"].data[pos_x, pos_y]
+            )
+            self.grid.properties["explored"].data[pos_x, pos_y] = False
+        self.total_initial_knowledge = 1.0
+
+    def __init_agents(self, agent_generation_function):
+        for _ in range(self.number_agents):
+            w = agent_generation_function(
+                self.initial_curiosity, self.rng, self.generation_params
+            )
+            a = Scientist(self, w, self.epsilon)
+            coords = (self.rng.integers(0, self.size), self.rng.integers(0, self.size))
+            a.age = self.rng.choice(np.arange(23, 50))
+            self.grid.place_agent(a, coords)
+            a.last_tile_knowledge = self.grid.properties["knowledge"].data[coords]
+            a.current_local_merit = a.local_merit(a.pos)
+
+        self.scientists = [
+            agent for agent in self.agents if isinstance(agent, Scientist)
+        ]
 
     def __init__(
         self,
@@ -210,59 +288,43 @@ class MyModel(mesa.Model):
         initial_curiosity,
         epsilon,
         harvest,
-        sizeGrid,
-        initCellFunc,
+        grid_size,
+        cell_init_function,
         use_distance,
         generation_params={"seed": 0},
         agent_generation_rate=np.float64(-1.0),
         new_questions=False,
         agent_seed=0,
         step_limit=400,
-        AgentGenerationFunc=lambda cur, rng, params: cur,
+        agent_generation_function=lambda cur, rng, params: cur,
         vanishing_factor_for_prestige=0,
         use_visibility_reward=True,
     ):
         """parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc"""
-        super().__init__()
+        super().__init__(seed=agent_seed)
+
+        self.generation_params = generation_params | {
+            "initCellFunc": cell_init_function.__name__
+        }
         self.number_connection = n_connection
         self.number_agents = n_agents
         self.agent_generation_rate = agent_generation_rate
         self.new_questions = new_questions
-        self.size = sizeGrid
-        self.steps = 0
+        self.size = grid_size
         self.harvest = harvest
         self.initial_curiosity = initial_curiosity
         self.epsilon = epsilon
         self.use_distance = use_distance
-        self.grid = mesa.space.MultiGrid(sizeGrid, sizeGrid, torus=True)
-        self.grid.add_property_layer(
-            PropertyLayer(
-                "knowledge", sizeGrid, sizeGrid, np.float64(0.0), dtype=np.float64
-            )
-        )
-        self.grid.add_property_layer(
-            PropertyLayer(
-                "initial_knowledge",
-                sizeGrid,
-                sizeGrid,
-                np.float64(0.0),
-                dtype=np.float64,
-            )
-        )
-        self.grid.add_property_layer(
-            PropertyLayer("explored", sizeGrid, sizeGrid, False, dtype=bool)
-        )
-        self.totalInitialKnowledge = 0
+        self.total_initial_knowledge = 0
         self.step_limit = step_limit
         self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
         self.use_visibility_reward = use_visibility_reward
 
-        self.avgcurrentAgentKnowledge = 0
-        self.agent_avg_distance = 0
-        self.generation_params = generation_params | {
-            "initCellFunc": initCellFunc.__name__
-        }
-        self.rng = np.random.default_rng(agent_seed)
+        self.avg_current_agent_knowledge = 0
+        self.agent_avg_distance = np.float64(0.0)
+
+        self.__init_grid(cell_init_function)
+        self.__init_agents(agent_generation_function)
         self.explored_weighted_by_initial_knowledge = 0
         self.percentage_knowledge_harvested = 0
         self.explored_percentage = 0
@@ -284,46 +346,7 @@ class MyModel(mesa.Model):
                 "Agents will NOT use distance information when choosing where to go, curiosity and noise will have similar effects"
             )
 
-        self._seed = agent_seed
-
-        for posX, posY in list(itertools.product(range(sizeGrid), range(sizeGrid))):
-            initial_value = initCellFunc(posX, posY, sizeGrid, generation_params)
-            self.grid.properties["knowledge"].data[posX, posY] = initial_value
-            self.totalInitialKnowledge += initial_value
-        min_knowledge, max_knowledge = (
-            np.min(self.grid.properties["knowledge"].data),
-            np.max(self.grid.properties["knowledge"].data),
-        )
-        for posX, posY in list(itertools.product(range(sizeGrid), range(sizeGrid))):
-            val = self.grid.properties["knowledge"].data[posX, posY]
-            if not self.new_questions:
-                self.grid.properties["knowledge"].data[posX, posY] = (
-                    val / self.totalInitialKnowledge
-                )
-            else:
-                self.grid.properties["knowledge"].data[posX, posY] = (
-                    val - min_knowledge
-                ) / (max_knowledge - min_knowledge) * 0.95 + 0.05
-
-            self.grid.properties["initial_knowledge"].data[posX, posY] = (
-                self.grid.properties["knowledge"].data[posX, posY]
-            )
-            self.grid.properties["explored"].data[posX, posY] = False
-        self.totalInitialKnowledge = 1
-
-        for _ in range(n_agents):
-            w = AgentGenerationFunc(initial_curiosity, self.rng, generation_params)
-            a = Scientist(self, w, epsilon)
-            coords = (self.rng.integers(0, sizeGrid), self.rng.integers(0, sizeGrid))
-            a.age = self.rng.choice(np.arange(23, 50))
-            self.grid.place_agent(a, coords)
-            a.last_tile_knowledge = self.grid.properties["knowledge"].data[coords]
-            a.current_local_merit = a.local_merit(a.pos)
-
-        self.scientists = [
-            agent for agent in self.agents if isinstance(agent, Scientist)
-        ]
-        self.updateknowledge()
+        self.update_knowledge()
         self.datacollector = mesa.DataCollector(
             model_reporters={
                 "Step": lambda m: m.steps,
@@ -361,10 +384,10 @@ class MyModel(mesa.Model):
                     if np.sum([a.prestige for a in m.agents]) > 0
                     else 0
                 ),
-                "avgcurrentAgentKnowledge": lambda m: m.avgcurrentAgentKnowledge,
+                "avgcurrentAgentKnowledge": lambda m: m.avg_current_agent_knowledge,
                 "explored_percentage": lambda m: m.explored_percentage,
                 "explored_weighted_by_initial_knowledge": lambda m: m.explored_weighted_by_initial_knowledge,
-                "total_initial_knowledge": lambda m: m.totalInitialKnowledge,
+                "total_initial_knowledge": lambda m: m.total_initial_knowledge,
                 "avg_knowledge_on_grid": lambda m: np.mean(
                     m.grid.properties["knowledge"].data
                 ),
@@ -392,8 +415,8 @@ class MyModel(mesa.Model):
         )
         self.end_loop_update()
 
-    def updateknowledge(self):
-        self.avgcurrentAgentKnowledge = np.mean(
+    def update_knowledge(self):
+        self.avg_current_agent_knowledge = np.mean(
             [agent.last_tile_knowledge for agent in self.scientists]
         )
 
@@ -413,7 +436,7 @@ class MyModel(mesa.Model):
         self.grid.properties["knowledge"].data[pos] = self.grid.properties[
             "knowledge"
         ].data[pos] * (1 - self.harvest)
-        self.updateknowledge()
+        self.update_knowledge()
 
     def __generate_new_agents(self):
         if self.agent_generation_rate > 0:
@@ -479,7 +502,7 @@ class MyModel(mesa.Model):
                 self.grid.properties["explored"].data
                 * (self.grid.properties["initial_knowledge"].data)
             )
-            / self.totalInitialKnowledge
+            / self.total_initial_knowledge
         )
         self.agent_avg_distance = np.mean(
             [
@@ -488,8 +511,9 @@ class MyModel(mesa.Model):
             ]
         )
         self.percentage_knowledge_harvested = (
-            self.totalInitialKnowledge - np.sum(self.grid.properties["knowledge"].data)
-        ) / self.totalInitialKnowledge
+            self.total_initial_knowledge
+            - np.sum(self.grid.properties["knowledge"].data)
+        ) / self.total_initial_knowledge
 
         for agent in self.scientists:
             agent.current_local_merit = agent.local_merit(agent.pos)
@@ -597,7 +621,7 @@ class MyModel(mesa.Model):
         explorePercentage = sum([sum(k) for k in explorelist]) / (self.size**2)
         bestKnowledge = np.max(self.grid.properties["knowledge"].data)
         avgMap = np.mean(self.grid.properties["knowledge"].data)
-        avgAgent = self.avgcurrentAgentKnowledge
+        avgAgent = self.avg_current_agent_knowledge
         Val1 = [explorePercentage]
         Val2 = [avgMap / bestKnowledge]
         Val3 = [avgAgent / bestKnowledge]
@@ -617,7 +641,7 @@ class MyModel(mesa.Model):
                 ]["explored_percentage"]
                 bestKnowledge = np.max(self.grid.properties["knowledge"].data)
                 avgMap = np.mean(self.grid.properties["knowledge"].data)
-                avgAgent = self.avgcurrentAgentKnowledge
+                avgAgent = self.avg_current_agent_knowledge
                 Val1.append(explorePercentage)
                 Val2.append(avgMap / bestKnowledge)
                 Val3.append(avgAgent / bestKnowledge)
@@ -706,7 +730,7 @@ class MyModel(mesa.Model):
         for k in range(self.step_limit):
             self.step(True)
 
-        if longitudinal == False:
+        if not longitudinal:
             a = self.datacollector.get_model_vars_dataframe().iloc[-1].to_dict()
             b = {
                 k: self.__getattribute__(k)

@@ -1,4 +1,5 @@
 import random
+from typing import Optional
 import numpy as np
 import matplotlib.pyplot as plt
 from numpy.random import Generator
@@ -13,55 +14,52 @@ def randominit(posX, posY, size, args):
     return random.random()
 
 
-def Gaussian(posX, posY, size, args):
-    """Requires args to contain (kappa or std) and seed"""
+def Gaussian(posX, posY, size, args, rng: Optional[np.random.Generator]):
     if "kappa" in args.keys():
         kappa = args["kappa"]
     else:
         kappa = 1 / (args["std"] / size)
 
-    state = random.getstate()
-    random.seed(args["seed"])
-    muX = random.random() * 2 * np.pi
-    muY = random.random() * 2 * np.pi
-    random.setstate(state)
+    rng = rng or np.random.default_rng()
+    muX = rng.random() * 2 * np.pi
+    muY = rng.random() * 2 * np.pi
 
     valX = vonmises.pdf(posX * 2 * np.pi / size, loc=muX, kappa=kappa)
     valY = vonmises.pdf(posY * 2 * np.pi / size, loc=muY, kappa=kappa)
     return valX * valY
 
 
-def noisyGaussian(posX, posY, size, args):
+def noisyGaussian(posX, posY, size, args, rng: Optional[np.random.Generator]):
     """Requires args to contain prop_random"""
     prop_random = args["prop_random"]
-    a = random.random()
-    b = Gaussian(posX, posY, size, args)
+    rng = rng or np.random.default_rng()
+    a = rng.random()
+    b = Gaussian(posX, posY, size, args, rng)
     return a + prop_random * b
 
 
-def multipleGaussians(posX, posY, size, args):
+def multipleGaussians(posX, posY, size, args, rng: Optional[np.random.Generator]):
     """Requires args to contain (number_gaussian) and seed"""
     number_gaussians = args["number_gaussians"]
-    state = random.getstate()
-    random.seed(args["seed"])
-    AllSeeds = [random.random() for k in range(number_gaussians)]
-    random.setstate(state)
+
+    rng = rng or np.random.default_rng()
+    AllSeeds = [rng.random() for k in range(number_gaussians)]
+
     tot = 0
     tempDict = copy.deepcopy(args)
     for k in range(number_gaussians):
         tempDict["seed"] = AllSeeds[k]
-        tot += Gaussian(posX, posY, size, tempDict)
+        tot += Gaussian(posX, posY, size, tempDict, rng)
     return tot
 
 
 ## additional function for agent curiosity
-def beta(mu, seed, params):
+def beta(mu, rng: Generator, params):
     if mu > 0 and mu < 1:
-        np.random.seed(seed)
         std_beta = params.get("std_curiosity", 0.1)
         alpha = ((1 - mu) / std_beta**2 - 1 / mu) * mu**2
         beta = alpha * (1 / mu - 1)
-        return np.random.beta(alpha, beta)
+        return rng.beta(alpha, beta)
     else:
         return mu
 
