@@ -10,8 +10,9 @@ import copy
 # self.model.grid.move_agent(self, new_position)
 
 
-def randominit(posX, posY, size, args):
-    return random.random()
+def randominit(posX, posY, size, args, rng: Optional[np.random.Generator]):
+    rng = rng or np.random.default_rng()
+    return rng.random()
 
 
 def Gaussian(posX, posY, size, args, rng: Optional[np.random.Generator]):

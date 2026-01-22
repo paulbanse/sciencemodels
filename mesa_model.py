@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ast import Call, Dict
 from typing import Any, Callable
 from mesa.space import Coordinate, PropertyLayer
 import mesa
@@ -96,6 +97,9 @@ class Scientist(mesa.Agent):
         else:
             self.prestige_vanishing += value
 
+    def _compute_visibility(self, avg_agent_distance: np.float64) -> np.float64:
+        return (self.model.agent_avg_distance + 1.0) / (avg_agent_distance + 1.0)
+
     def compute_all_rewards(
         self, pos: Coordinate, novelty: np.float64
     ) -> tuple[np.float64, np.float64]:
@@ -106,32 +110,38 @@ class Scientist(mesa.Agent):
                 self.curiosity * novelty / self.model.avg_current_agent_knowledge,
                 np.float64(0.0),
             )
-        avg_agent_distance = np.float64(
-            np.mean(
-                [a.compute_distance(pos) for a in self.model.scientists if a != self]
-            )
+
+        others = [a for a in self.model.scientists if a is not self]
+        dists = np.fromiter(
+            (a.compute_distance(pos) for a in others),
+            dtype=np.float64,
+            count=len(others),
         )
-        avg_all_distance = self.model.agent_avg_distance
-        visibility = (avg_all_distance + 1.0) / (avg_agent_distance + 1.0)
-        if sum([a.prestige_vanishing for a in self.model.scientists if a != self]) == 0:
-            avg_agent_distance_p = avg_agent_distance
-        else:
+        prest = np.fromiter(
+            (a.prestige_vanishing for a in others), dtype=np.float64, count=len(others)
+        )
+
+        avg_agent_distance = dists.mean()
+        visibility = self._compute_visibility(avg_agent_distance)
+
+        avg_agent_distance_p = avg_agent_distance
+        if prest.sum() > 0.0:
             avg_agent_distance_p = np.average(
-                [a.compute_distance(pos) for a in self.model.scientists if a != self],
-                weights=[
-                    a.prestige_vanishing for a in self.model.scientists if a != self
-                ],
+                dists,
+                weights=prest,
             )
-        visibility_p = (avg_all_distance + 1) / (avg_agent_distance_p + 1)
-        # differentiate between visibility of a field vs. visibility of an agent? (would not this formulation stay constant across neihbouring cells?; answer: no, it won't)
-        if not self.model.use_visibility_reward:
-            reward = (novelty / self.model.avg_current_agent_knowledge) ** (
-                self.curiosity
-            ) * visibility ** (1 - self.curiosity)
-        else:
-            reward = (novelty / self.model.avg_current_agent_knowledge) ** (
-                self.curiosity
-            ) * (visibility_p) ** (1 - self.curiosity)
+
+        visibility_used = visibility
+        if self.model.use_visibility_reward:
+            visibility_used = (self.model.agent_avg_distance + 1) / (
+                avg_agent_distance_p + 1
+            )
+
+        # differentiate between visibility of a field vs. visibility of an agent?
+        # (would not this formulation stay constant across neihbouring cells?; answer: no, it won't)
+        reward = (novelty / self.model.avg_current_agent_knowledge) ** (
+            self.curiosity
+        ) * visibility_used ** (1 - self.curiosity)
 
         # currently we use only the above. however, we could employ three options:
         # (1) the above, where I am dragged towards others,
@@ -175,7 +185,7 @@ class Scientist(mesa.Agent):
 
         for neighbor in neighbors_nodes:
             neighbor_rw_novelty = self.model.compute_knowledge(neighbor)
-            noise = 2.0 * (self.model.rng.random() - 0.5)
+            noise = self.rng.uniform(-1.0, 1.0)
             total_reward, visibility = self.compute_all_rewards(
                 neighbor, neighbor_rw_novelty * (1 + self.epsilon * noise)
             )
@@ -214,8 +224,9 @@ class MyModel(mesa.Model):
     scientists: list[Scientist]
     total_initial_knowledge: np.float64
     avg_current_agent_knowledge: np.float64
+    agent_avg_distance: np.float64
 
-    def __init_grid(
+    def _init_grid(
         self, cell_init_function: Callable[[int, int, int, Any, Generator], np.float64]
     ):
         self.grid = mesa.space.MultiGrid(self.size, self.size, torus=True)
@@ -266,7 +277,7 @@ class MyModel(mesa.Model):
             self.grid.properties["explored"].data[pos_x, pos_y] = False
         self.total_initial_knowledge = np.float64(1.0)
 
-    def __init_agents(self, agent_generation_function):
+    def _init_agents(self, agent_generation_function):
         for _ in range(self.number_agents):
             w = agent_generation_function(
                 self.initial_curiosity, self.rng, self.generation_params
@@ -284,22 +295,24 @@ class MyModel(mesa.Model):
 
     def __init__(
         self,
-        n_agents,
-        n_connection,
-        initial_curiosity,
-        epsilon,
-        harvest,
-        grid_size,
-        cell_init_function,
-        use_distance,
+        n_agents: int,
+        n_connection: int,
+        initial_curiosity: np.float64,
+        epsilon: np.float64,
+        harvest: np.float64,
+        grid_size: int,
+        cell_init_function: Callable[[int, int, int, Dict, Generator], np.float64],
+        use_distance: bool,
         generation_params={"seed": 0},
-        agent_generation_rate=np.float64(-1.0),
-        new_questions=False,
-        agent_seed=0,
-        step_limit=400,
-        agent_generation_function=lambda cur, rng, params: cur,
-        vanishing_factor_for_prestige=0,
-        use_visibility_reward=True,
+        agent_generation_rate: np.float64 = np.float64(-1.0),
+        new_questions: bool = False,
+        agent_seed: int = 0,
+        step_limit: int = 400,
+        agent_generation_function: Callable[
+            [np.float64, Generator, Dict], np.float64
+        ] = lambda cur, rng, params: cur,
+        vanishing_factor_for_prestige: np.float64 = np.float64(0.0),
+        use_visibility_reward: bool = True,
     ):
         """parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc"""
         super().__init__(seed=agent_seed)
@@ -316,16 +329,14 @@ class MyModel(mesa.Model):
         self.initial_curiosity = initial_curiosity
         self.epsilon = epsilon
         self.use_distance = use_distance
-        self.total_initial_knowledge = np.float64(0.0)
         self.step_limit = step_limit
         self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
         self.use_visibility_reward = use_visibility_reward
 
+        self.total_initial_knowledge = np.float64(0.0)
         self.avg_current_agent_knowledge = np.float64(0.0)
         self.agent_avg_distance = np.float64(0.0)
 
-        self.__init_grid(cell_init_function)
-        self.__init_agents(agent_generation_function)
         self.explored_weighted_by_initial_knowledge = np.float64(0.0)
         self.percentage_knowledge_harvested = np.float64(0.0)
         self.explored_percentage = np.float64(0.0)
@@ -336,6 +347,9 @@ class MyModel(mesa.Model):
         self.weighted_90_step = self._default_steps_thresholds
         self.harvested_50_step = self._default_steps_thresholds
         self.harvested_90_step = self._default_steps_thresholds
+
+        self._init_grid(cell_init_function)
+        self._init_agents(agent_generation_function)
 
         if not (
             self.use_distance
@@ -390,7 +404,7 @@ class MyModel(mesa.Model):
                 "explored_weighted_by_initial_knowledge": lambda m: m.explored_weighted_by_initial_knowledge,
                 "total_initial_knowledge": lambda m: m.total_initial_knowledge,
                 "avg_knowledge_on_grid": lambda m: np.mean(
-                    m.grid.properties["knowledge"].data
+                    m.grid.properties["knowledge"].data, dtype=np.float64
                 ),
                 "best_knowledge": lambda m: np.max(m.grid.properties["knowledge"].data),
                 "avg_distance_between_agents": lambda m: m.agent_avg_distance,
@@ -430,8 +444,7 @@ class MyModel(mesa.Model):
 
     def compute_knowledge(self, pos: Coordinate) -> np.float64:
         posX, posY = pos
-        value = self.grid.properties["knowledge"].data[posX, posY]
-        return value
+        return self.grid.properties["knowledge"].data[posX, posY]
 
     def farm(self, pos):
         self.grid.properties["knowledge"].data[pos] = self.grid.properties[
@@ -443,7 +456,7 @@ class MyModel(mesa.Model):
         if self.agent_generation_rate > 0:
             agents_to_generate: int = np.floor(
                 self.steps * self.agent_generation_rate
-            ) - np.floor(self.steps * self.agent_generation_rate)
+            ) - np.floor((self.steps - 1) * self.agent_generation_rate)
             prestige_agent_tuples = [(a.prestige, a) for a in self.scientists]
             totalPrestige = sum([a.prestige for a in self.scientists])
             supervisors = []
@@ -462,16 +475,16 @@ class MyModel(mesa.Model):
             for agent in self.scientists:
                 self.grid.properties["explored"].data[agent.pos] = True
 
-    def __generate_new_questions(self):
+    def _generate_new_questions(self):
         if self.new_questions:
             occupied_pos = list(set([agent.pos for agent in self.agents]))
-            for posX, posY in occupied_pos:
-                if self.grid.properties["knowledge"].data[posX, posY] < 0.025:
-                    self.grid.properties["knowledge"].data[posX, posY] = (
+            for pos_x, pos_y in occupied_pos:
+                if self.grid.properties["knowledge"].data[pos_x, pos_y] < 0.025:
+                    self.grid.properties["knowledge"].data[pos_x, pos_y] = (
                         self.rng.random()
                     )
 
-    def __update_step_goals(self) -> None:
+    def _update_step_goals(self) -> None:
         sentinel = self._default_steps_thresholds
         steps = self.steps
 
@@ -493,7 +506,7 @@ class MyModel(mesa.Model):
 
     def end_loop_update(self):
         self.__generate_new_agents()
-        self.__generate_new_questions()
+        self._generate_new_questions()
 
         self.explored_percentage = np.sum(self.grid.properties["explored"].data) / (
             self.size**2
@@ -507,9 +520,13 @@ class MyModel(mesa.Model):
         )
         self.agent_avg_distance = np.mean(
             [
-                np.mean([a.compute_distance(b.pos) for b in self.scientists if a != b])
+                np.mean(
+                    [a.compute_distance(b.pos) for b in self.scientists if a != b],
+                    dtype=np.float64,
+                )
                 for a in self.scientists
-            ]
+            ],
+            dtype=np.float64,
         )
         self.percentage_knowledge_harvested = (
             self.total_initial_knowledge
@@ -520,7 +537,7 @@ class MyModel(mesa.Model):
             agent.current_local_merit = agent.local_merit(agent.pos)
 
         self.datacollector.collect(self)
-        self.__update_step_goals()
+        self._update_step_goals()
 
     def step(self, endupdate=True):
         # compute everything and let agents take the decision
