@@ -213,6 +213,7 @@ class MyModel(mesa.Model):
     use_distance: bool
     scientists: list[Scientist]
     total_initial_knowledge: np.float64
+    avg_current_agent_knowledge: np.float64
 
     def __init_grid(
         self, cell_init_function: Callable[[int, int, int, Any, Generator], np.float64]
@@ -263,7 +264,7 @@ class MyModel(mesa.Model):
                 self.grid.properties["knowledge"].data[pos_x, pos_y]
             )
             self.grid.properties["explored"].data[pos_x, pos_y] = False
-        self.total_initial_knowledge = 1.0
+        self.total_initial_knowledge = np.float64(1.0)
 
     def __init_agents(self, agent_generation_function):
         for _ in range(self.number_agents):
@@ -315,19 +316,19 @@ class MyModel(mesa.Model):
         self.initial_curiosity = initial_curiosity
         self.epsilon = epsilon
         self.use_distance = use_distance
-        self.total_initial_knowledge = 0
+        self.total_initial_knowledge = np.float64(0.0)
         self.step_limit = step_limit
         self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
         self.use_visibility_reward = use_visibility_reward
 
-        self.avg_current_agent_knowledge = 0
+        self.avg_current_agent_knowledge = np.float64(0.0)
         self.agent_avg_distance = np.float64(0.0)
 
         self.__init_grid(cell_init_function)
         self.__init_agents(agent_generation_function)
-        self.explored_weighted_by_initial_knowledge = 0
-        self.percentage_knowledge_harvested = 0
-        self.explored_percentage = 0
+        self.explored_weighted_by_initial_knowledge = np.float64(0.0)
+        self.percentage_knowledge_harvested = np.float64(0.0)
+        self.explored_percentage = np.float64(0.0)
         self._default_steps_thresholds = step_limit * (1.25)
         self.explored_50_step = self._default_steps_thresholds
         self.explored_90_step = self._default_steps_thresholds
@@ -417,7 +418,7 @@ class MyModel(mesa.Model):
 
     def update_knowledge(self):
         self.avg_current_agent_knowledge = np.mean(
-            [agent.last_tile_knowledge for agent in self.scientists]
+            [agent.last_tile_knowledge for agent in self.scientists], dtype=np.float64
         )
 
     def new_place(self, agent1, coords, newAgent=False):
