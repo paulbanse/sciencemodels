@@ -45,7 +45,6 @@ def generate_on_run(chosen_setup, foldername = ""):
 
 
     all_params = {'n_agents':20,             # minimum 3
-                "n_connection": 2,
                 "initial_curiosity":curiosities, # interest for exploration
                 "use_distance": True,        # if True, agents take into account distance when choosing where to go
                 "epsilon": 0.1,           # noise in the measure of utility
@@ -53,12 +52,12 @@ def generate_on_run(chosen_setup, foldername = ""):
                 "sizeGrid":20,
                 "initCellFunc":generation_function, # generation method for the landscape, see landscapefunctions for the definitions
                 "generation_params": generation_params,       # parameters for the generation method
-                "agent_generation_rate": 0,                       # number of agent generated per generation, for example if 0.1, 10 new agent per generation
+                "agent_generation_time": 0,                       # number of agent generated per generation, for example if 0.1, 10 new agent per generation
                 "new_questions": 0,                    
                 "agent_seed": 1,                           # seed for the random of the agents
                 "step_limit": 400,
                 "AgentGenerationFunc": AgentGenerationFunc, # if this is not defined the function is just mu
-                "vanishing_factor_for_prestige": 0.9,
+                "vanishing_factor_for_prestige": 0.2,
                 "use_visibility_reward": True,
                 }
 
@@ -74,7 +73,7 @@ def generate_on_run(chosen_setup, foldername = ""):
                                                     skip_to = 0, 
                                                     longitudinal = False)
 
-foldername = "first_large_run"
+foldername = "large_run_with_ideal"
 os.makedirs("data/" + foldername, exist_ok=True)
 with open("bulk_runner.py") as fp, open("data/" + foldername + "/creationscript.txt", "w") as tp:
     tp.writelines(fp.readlines())

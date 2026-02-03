@@ -7,7 +7,7 @@ import numpy as np
 
 #example of generation params for landscapefunctions.multipleGaussians : 
 
-chosen_setup = 3 # 0 for randominit, 1 for 2 gaussians, 2 for 6 gaussians, 3 for noisy gaussian
+chosen_setup = 0 # 0 for randominit, 1 for 2 gaussians, 2 for 6 gaussians, 3 for noisy gaussian
 generation_params = {}
 generation_function =landscapefunctions.randominit
 
@@ -36,8 +36,7 @@ match chosen_setup:
         exit()
 
 
-all_params = {'n_agents':20,             # minimum 3
-              "n_connection": 2,
+all_params = {'n_agents':10,             # minimum 3
               "initial_curiosity":0.5, # interest for exploration
               "use_distance": True,        # if True, agents take into account distance when choosing where to go
               "epsilon": 0.1,           # noise in the measure of utility
@@ -45,10 +44,10 @@ all_params = {'n_agents':20,             # minimum 3
               "sizeGrid":20,
               "initCellFunc":generation_function, # generation method for the landscape, see landscapefunctions for the definitions
               "generation_params": generation_params,       # parameters for the generation method
-              "agent_generation_rate": 0,                       # number of agent generated per generation, for example if 0.1, 10 new agent per generation
-              "new_questions": 1, 
+              "agent_generation_time": 0,                       # number of agent generated per generation, for example if 0.1, 10 new agent per generation
+              "new_questions": 0, 
               "agent_seed": 1,                           # seed for the random of the agents
-              "step_limit": 400,
+              "step_limit": 200,
               "AgentGenerationFunc": landscapefunctions.uniform, # if this is not defined the function is just 
               "vanishing_factor_for_prestige": 0.5,
               "use_visibility_reward": True,
@@ -57,4 +56,4 @@ all_params = {'n_agents':20,             # minimum 3
 model = mesa_model.MyModel(**all_params)
 
 
-model.animate_steps(dynamic_plot=False, csv_name="long_NGauss",end_report_file='')# csv_name="data_randominit",end_report_file='end_report.csv')
+model.animate_steps(dynamic_plot=True, csv_name="long_NGauss",end_report_file='')# csv_name="data_randominit",end_report_file='end_report.csv')

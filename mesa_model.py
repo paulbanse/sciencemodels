@@ -1,6 +1,5 @@
 from mesa.space import PropertyLayer
 import mesa
-import random
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -44,6 +43,7 @@ class Scientist(mesa.Agent):
         self.model = model
         self.visibility = 0
         self.current_localMerit = 0
+        self.ideal_Merit= 0
 
 
     def computeDistance(self,otherAgentPos):
@@ -96,16 +96,18 @@ class Scientist(mesa.Agent):
         #    reward = self.curiosity * Novelty/ self.model.avgcurrentAgentKnowledge + (1-self.curiosity) * visibility
         return reward, visibility
     
-    def localMerit(self, pos):
+    def computeLocalMerit(self, pos):
         # Get the four direct neighbors
         neighbors = self.model.grid.get_neighborhood(pos, moore=False, include_center=False)
         # Get knowledge values for all positions (center + neighbors)
         knowledge_values = [self.model.computeKnowledge(pos)]  # center position
-
         for neighbor_pos in neighbors:
             knowledge_values.append(self.model.computeKnowledge(neighbor_pos))
         # Return the average
-        return np.mean(knowledge_values)
+        self.current_localMerit = np.mean(knowledge_values)
+
+
+
     
     def step(self):
         '''pick a random node and check if according to the agent preference it is better to move to that node'''
@@ -143,20 +145,19 @@ class Scientist(mesa.Agent):
 
 
 class MyModel(mesa.Model):
-    def __init__(self, n_agents, n_connection, initial_curiosity, epsilon, harvest, sizeGrid, 
+    def __init__(self, n_agents, initial_curiosity, epsilon, harvest, sizeGrid, 
                  initCellFunc, use_distance, 
                  generation_params = {"seed" :0}, 
-                 agent_generation_rate = -1, 
+                 agent_generation_time = -1, 
                  new_questions = 0,
                  agent_seed = 0,step_limit = 400,
                  AgentGenerationFunc = lambda cur,seed,params: cur,
                  vanishing_factor_for_prestige = 0,
                  use_visibility_reward = True):
         ''' parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc '''
-        super().__init__()
-        self.number_connection = n_connection
+        super().__init__(seed = agent_seed)
         self.number_agents = n_agents
-        self.agent_generation = agent_generation_rate
+        self.agent_generation = agent_generation_time
         self.new_questions = new_questions
         self.size = sizeGrid
         self.steps = 0
@@ -168,15 +169,15 @@ class MyModel(mesa.Model):
         self.grid.add_property_layer(PropertyLayer("knowledge",  sizeGrid,sizeGrid,0.0, dtype=float) )
         self.grid.add_property_layer(PropertyLayer("initial_knowledge",  sizeGrid,sizeGrid,0.0, dtype=float) )
         self.grid.add_property_layer(PropertyLayer("explored",  sizeGrid,sizeGrid,False, dtype=bool) )
+        self.grid.add_property_layer(PropertyLayer("previous_knowledge",  sizeGrid,sizeGrid,0.0, dtype=float) )
         self.totalInitialKnowledge = 0
         self.step_limit = step_limit
         self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
         self.use_visibility_reward = use_visibility_reward
 
-        self.avgcurrentAgentKnowledge = 0  
+        self.avgcurrentAgentKnowledge = 0
         self.agent_avg_distance = 0
         self.generation_params = generation_params | {"initCellFunc": initCellFunc.__name__}
-        self.rng = random.Random(agent_seed)
         
         self.explored_weighted_by_initial_knowledge = 0
         self.percentage_knowledge_harvested = 0
@@ -204,27 +205,38 @@ class MyModel(mesa.Model):
             if self.new_questions == 0:
                 self.grid.properties["knowledge"].data[posX,posY] = val /self.totalInitialKnowledge
             if self.new_questions > 0:
-                self.grid.properties["knowledge"].data[posX,posY] = (val - min_knowledge)/(max_knowledge - min_knowledge) * 0.95 + 0.05
+                self.grid.properties["knowledge"].data[posX,posY] = val /self.totalInitialKnowledge * 0.5 + 1/sizeGrid**2 *0.5
                 
             self.grid.properties["initial_knowledge"].data[posX,posY] = self.grid.properties["knowledge"].data[posX,posY]
+            self.grid.properties["previous_knowledge"].data[posX,posY] = self.grid.properties["knowledge"].data[posX,posY]
             self.grid.properties["explored"].data[posX,posY] = False
         self.totalInitialKnowledge = 1
             
         
-
         for _ in range(n_agents):
-            w = AgentGenerationFunc(initial_curiosity,self._seed + _, generation_params)
+            w = AgentGenerationFunc(initial_curiosity,self.rng, generation_params)
             a = Scientist(self, w,epsilon)
-            coords = (self.rng.randrange(0, sizeGrid), self.rng.randrange(0, sizeGrid))
-            a.age = self.rng.randint(23,50)
+            coords = (self.rng.integers(0, sizeGrid), self.rng.integers(0, sizeGrid))
+            a.age = self.rng.integers(23,50)
             self.grid.place_agent(a, coords)
             a.lastTileKnowledge = self.grid.properties["knowledge"].data[coords]
-            a.current_localMerit = a.localMerit(a.pos)
+            a.computeLocalMerit(a.pos)
 
         
-        self.updateknowledge()
+        self.updateAvgknowledge()
+        self.updateIdealMerit()
+        def correlation_reporter(merit_type, prestige_type):
+            def reporter(m):
+                Prest = [getattr(a, prestige_type) for a in m.agents]
+                Mert = [getattr(a, merit_type) for a in m.agents]
+                if  np.std(Prest) > 0 and np.std(Mert) > 0:
+                    return np.corrcoef(Prest,Mert)[0, 1]
+                else:
+                    return 0
+            return reporter
+         
         self.datacollector = mesa.DataCollector(
-            model_reporters={"Step": lambda m: m.steps,
+            model_reporters={"step": lambda m: m.steps,
                              "mean_age": lambda m: m.agents.agg("age", np.mean),
                              "mean_prestige": lambda m: m.agents.agg("prestige", np.mean),
                              "mean_vanishing_prestige": lambda m:  m.agents.agg("prestige_vanishing", np.mean),
@@ -241,19 +253,76 @@ class MyModel(mesa.Model):
                              "best_knowledge": lambda m: np.max(m.grid.properties["knowledge"].data),
                              "avg_distance_between_agents": lambda m: m.agent_avg_distance,
                              "percentage_knowledge_harvested": lambda m: m.percentage_knowledge_harvested,
-                             "corr_prestige_localMerit": lambda m: (np.corrcoef([a.prestige for a in m.agents],[a.current_localMerit for a in m.agents])[0, 1] if  np.std([a.prestige for a in m.agents]) > 0 and np.std([a.current_localMerit for a in m.agents]) > 0 else 0)
-                            },
+                             "Corr_prestige_localMerit": correlation_reporter("current_localMerit", "prestige"),
+                             "Corr_prestige_idealMerit": correlation_reporter("ideal_Merit", "prestige"),
+                             "Corr_prestigeVisibility_localMerit": correlation_reporter("current_localMerit", "prestige_visibility"),
+                             "Corr_prestigeVisibility_idealMerit": correlation_reporter("ideal_Merit", "prestige_visibility"),
+                             "Corr_prestigevanishing_localMerit": correlation_reporter("current_localMerit", "prestige_vanishing"),
+                             "Corr_prestigevanishing_idealMerit": correlation_reporter("ideal_Merit", "prestige_vanishing"),
+                            }, # "corr_prestige_localMerit": lambda m: (np.corrcoef([a.prestige for a in m.agents],[a.current_localMerit for a in m.agents])[0, 1] if  np.std([a.prestige for a in m.agents]) > 0 and np.std([a.current_localMerit for a in m.agents]) > 0 else 0)
+
             agent_reporters={"prestige":   "prestige",
                              "prestige_vanishing":   "prestige_vanishing",
                              "prestige_visibility":   "prestige_visibility",
                              "lastTileKnowledge": "lastTileKnowledge",
                              'curiosity': "curiosity",                  
-                             "localMerit": "current_localMerit"
+                             "localMerit": "current_localMerit",
+                             "idealMerit": "ideal_Merit",
                              })
         self.endLoopUpdate()
 
-    def updateknowledge(self):
+    def updateAvgknowledge(self):
         self.avgcurrentAgentKnowledge = np.mean([agent.lastTileKnowledge for agent in self.agents])
+
+    def updateIdealMerit(self):
+        """ first computes the difference between the current agent positionning and the ideal one computed from the knowledge in last round    
+        """
+        temp_knowledge_map= self.grid.properties["previous_knowledge"].data
+        
+        # compute the harvest made
+        IdealHarvestList = []
+        L = [(a.pos, a) for a in self.agents]
+        L = sorted(L, key=lambda L: L[0])  #sort for positions so same positions are together
+        ActualHarvestList = []
+        pastpos, redone = -1,0
+        for kpos,k in L:
+            know = temp_knowledge_map[kpos]
+            if kpos == pastpos:
+                redone += 1
+            else:
+                redone = 0
+            know = know * ((1- self.harvest) ** redone)
+            pastpos = kpos
+            ActualHarvestList.append([know*self.harvest, kpos, k])
+        #print("at step", self.steps, "total harvest", sum([k[0] for k in ActualHarvestList]), np.sum(temp_knowledge_map) - np.sum(self.grid.properties["knowledge"].data))
+        
+        for k in range(self.number_agents):
+            pos = np.unravel_index(temp_knowledge_map.argmax(), temp_knowledge_map.shape) 
+            IdealHarvestList.append((temp_knowledge_map[pos]*self.harvest,pos))
+            temp_knowledge_map[pos] = temp_knowledge_map[pos] * (1- self.harvest)
+        #print("ideal harvest", sum([k[0] for k in IdealHarvestList]))
+
+        #compute loss per agent
+        ActualHarvestList = sorted(ActualHarvestList, key= lambda L: L[0])
+        for k in range(len(self.agents)):
+            loss = ActualHarvestList[k][0] - IdealHarvestList[0][0]
+            if loss == 0:
+                IdealHarvestList = IdealHarvestList[1:]
+            ActualHarvestList[k] = ActualHarvestList[k] + [loss]
+
+        # average loss per position
+        decided_pos = []
+        for (kharvested, kpos, k, loss) in ActualHarvestList:
+            if kpos not in decided_pos:
+                agents_on_site = [a[2] for a in ActualHarvestList if a[1]== kpos]
+                loss_on_site = sum([a[3] for a in ActualHarvestList if a[1]== kpos])
+                for a in agents_on_site:
+                    a.ideal_Merit = loss_on_site/(len(agents_on_site))
+                decided_pos.append(kpos)
+
+        self.grid.properties["previous_knowledge"].data = self.grid.properties["knowledge"].data.copy()
+            
+
 
     def new_place(self, agent1,coords, newAgent = False):
         '''function used to modify an agent location and update the surrounding agent's distance list'''
@@ -261,9 +330,6 @@ class MyModel(mesa.Model):
             self.grid.remove_agent(agent1)
         self.grid.place_agent(agent1, coords)
         self.grid.properties["explored"].data[coords] = True
-
-        
-
         for agent2 in self.agents:
             if agent2 != agent1:
                 dist = agent1.computeDistance(agent2.pos)
@@ -273,9 +339,10 @@ class MyModel(mesa.Model):
         value = self.grid.properties["knowledge"].data[posX,posY]
         return (value)
     
+    
     def Farm(self, pos):
         self.grid.properties["knowledge"].data[pos] = self.grid.properties["knowledge"].data[pos] * (1- self.harvest)
-        self.updateknowledge()
+        self.updateAvgknowledge()
     
     def endLoopUpdate(self):
         if self.agent_generation > 0:
@@ -299,15 +366,19 @@ class MyModel(mesa.Model):
                 self.grid.properties["explored"].data[agent.pos] = True
         if self.new_questions > 0:
             occupied_pos = list(set([ agent.pos for agent in self.agents]))
+            self.rng.shuffle(occupied_pos)
             for posX,posY in occupied_pos:
-                if self.grid.properties["knowledge"].data[posX,posY] < 0.025:
-                    self.grid.properties["knowledge"].data[posX,posY] = self.rng.random()
+                if self.grid.properties["knowledge"].data[posX,posY] < 1/self.size**2 *0.5:
+                    self.grid.properties["knowledge"].data[posX,posY] = self.totalInitialKnowledge - np.sum(self.grid.properties["knowledge"].data)
         self.explored_percentage = np.sum(self.grid.properties["explored"].data)/(self.size**2)
         self.explored_weighted_by_initial_knowledge = np.sum(self.grid.properties["explored"].data * (self.grid.properties["initial_knowledge"].data))/self.totalInitialKnowledge
         self.agent_avg_distance = np.mean([ np.mean([a.computeDistance(b.pos) for b in self.agents if a != b]) for a in self.agents])
         self.percentage_knowledge_harvested = (self.totalInitialKnowledge - np.sum(self.grid.properties["knowledge"].data))/self.totalInitialKnowledge
+        
+        
         for agent in self.agents:
-                agent.current_localMerit = agent.localMerit(agent.pos)
+                agent.computeLocalMerit(agent.pos)
+        self.updateIdealMerit() #note that we update the ideal merit now because it will be used next generation to know how "good" did the agent position
 
         self.datacollector.collect(self)
         if self.explored_50_step == self._default_steps_thresholds and self.explored_percentage >= 0.5: 
@@ -398,7 +469,8 @@ class MyModel(mesa.Model):
             ax2.set_title('Measures over time')
             ax.set_title('Epistemic Landscape')
             cbar = ax.figure.colorbar(im, cax=cax)
-            scat = ax.scatter(PosY, PosX, c = PosAge, alpha = 0.9, cmap = 'OrRd',edgecolors="k")
+            #scat = ax.scatter(PosY, PosX, c = PosAge, alpha = 0.9, cmap = 'OrRd',edgecolors="k")
+            scat = ax.scatter(PosY, PosX, c = ["r"] + ['b']*(self.number_agents-1), alpha = 0.9, cmap = 'OrRd',edgecolors="k")
 
         #measures
         explorelist = [[0 for k in range(self.size)] for j in range(self.size)]
@@ -415,7 +487,7 @@ class MyModel(mesa.Model):
         Val1 = [explorePercentage]
         Val2 = [avgMap/bestKnowledge]
         Val3 = [avgAgent/bestKnowledge]
-
+        Val1, Val2, Val3 = [0],[0],[0]
         def update(frame, cbar = cbar):
 
             if not(pause):
@@ -427,28 +499,32 @@ class MyModel(mesa.Model):
                     Xx, Yy  = agent.pos
                     explorelist[Xx][Yy] = 1
                     listForAvg.append(self.grid.properties["knowledge"].data[Xx,Yy])
-                explorePercentage = self.datacollector.get_model_vars_dataframe().iloc[-1]["explored_percentage"]
-                bestKnowledge = np.max(self.grid.properties["knowledge"].data)
-                avgMap = np.mean(self.grid.properties["knowledge"].data)
-                avgAgent = self.avgcurrentAgentKnowledge
-                Val1.append(explorePercentage)
-                Val2.append(avgMap/bestKnowledge)
-                Val3.append(avgAgent/bestKnowledge)
+                # explorePercentage = self.datacollector.get_model_vars_dataframe().iloc[-1]["explored_percentage"]
+                # bestKnowledge = np.max(self.grid.properties["knowledge"].data)
+                # avgMap = np.mean(self.grid.properties["knowledge"].data)
+                # avgAgent = self.avgcurrentAgentKnowledge
+                # Val1.append(explorePercentage)
+                # Val2.append(avgMap/bestKnowledge)
+                # Val3.append(avgAgent/bestKnowledge)
+                Val1.append(self.agents[0].current_localMerit)
+                Val2.append(10*self.agents[0].ideal_Merit)
+                Val3.append(self.agents[0].prestige_vanishing)
+
                 if dynamic_plot:
                     cax.cla()
                     cax2.cla()
                     ax2.cla()
-                    ax2.plot(Rounds, Val1, label = 'exploration percentage')
-                    ax2.plot(Rounds, Val2, label = 'Avg Map / Best Tile')
-                    ax2.plot(Rounds, Val3, label = 'Avg Agent / Best Tile')
+                    ax2.plot(Rounds, Val1, label = "localMerit")#'exploration percentage')
+                    ax2.plot(Rounds, Val2, label = "10 * loss (ideal Merit)")#'Avg Map / Best Tile')
+                    ax2.plot(Rounds, Val3, label = "vanishing prestige") #'Avg Agent / Best Tile')
                     ax2.legend()
                     PosX = [k.pos[0]+(k.unique_id/self.number_agents-0.5)**2 for k in self.agents ]
                     PosY = [k.pos[1]+(k.unique_id/self.number_agents-0.5)**2 for k in self.agents ]
                     PosAge = [k.curiosity for k in self.agents]
                     data = np.stack([PosY,PosX]).T
                     scat.set_offsets(data)
-                    scat.set_array(np.array(PosAge))
-                    scat.set_clim(vmin=min(PosAge), vmax=max(PosAge))
+                    #scat.set_array(np.array(PosAge))
+                    #scat.set_clim(vmin=min(PosAge), vmax=max(PosAge))
                     
                     epistemicGrid = self.grid.properties["knowledge"].data
                     
@@ -472,9 +548,9 @@ class MyModel(mesa.Model):
             self.datacollector.get_model_vars_dataframe().to_csv("data/model_"+csv_name+".csv")
             print("data saved to ", "agent_"+csv_name+".csv", "model_"+csv_name+".csv")
         if end_report_file != "":
-            a = self.datacollector.get_model_vars_dataframe().iloc[-1].to_dict()
+            a = {k: self.datacollector.get_model_vars_dataframe()[k].iloc[-1] for k in self.datacollector.get_model_vars_dataframe().columns if k[0].islower()}
             b = {k: self.__getattribute__(k) for k in self.__dict__ if (type(self.__getattribute__(k)) in [int,float,str,list, dict] and k[0] != '_') }
-            c = {"mean_corr_prestige_localMerit": self.datacollector.get_model_vars_dataframe()["corr_prestige_localMerit"].mean()}
+            c = {"Mean_of_"+k: self.datacollector.get_model_vars_dataframe()[k].mean() for k in self.datacollector.get_model_vars_dataframe().columns if k[0].isupper()}
             row = {**a, **b, **c}
             needs_header = not(is_non_zero_file("data/"+end_report_file))
             with open("data/"+end_report_file, 'a') as f:
@@ -491,13 +567,13 @@ class MyModel(mesa.Model):
                 self.step(True)
 
             if longitudinal == False:
-                a = self.datacollector.get_model_vars_dataframe().iloc[-1].to_dict()
+                a = {k: self.datacollector.get_model_vars_dataframe()[k].iloc[-1] for k in self.datacollector.get_model_vars_dataframe().columns if k[0].islower()}
                 b = {k: self.__getattribute__(k) for k in self.__dict__ if (type(self.__getattribute__(k)) in [int,float,str,list, dict] and k[0] != '_') }
-                c = {"mean_corr_prestige_localMerit": self.datacollector.get_model_vars_dataframe()["corr_prestige_localMerit"].mean()}
+                c = {"Mean_of_"+k: self.datacollector.get_model_vars_dataframe()[k].mean() for k in self.datacollector.get_model_vars_dataframe().columns if k[0].isupper()}
                 row = {**a, **b, **c}
                 return row
             else:
-                return self.datacollector.get_model_vars_dataframe()
+                return self.datacollector.get_agent_vars_dataframe()
     
 
 
