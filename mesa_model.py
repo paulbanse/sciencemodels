@@ -1,5 +1,4 @@
 from __future__ import annotations
-from ast import Call, Dict
 from typing import Any, Callable
 from mesa.space import Coordinate, PropertyLayer
 import mesa
@@ -201,13 +200,18 @@ class Scientist(mesa.Agent):
         else:
             self.visibility = currentVis
 
+        knowledge_before = self.model.compute_knowledge(self.pos)
         self.model.farm(self.pos)  # farming also updates AvgAgentKnowledge
 
         self.age += 1
         self.last_tile_knowledge = self.model.grid.properties["knowledge"].data[
             self.pos
         ]
-        self.increase_prestige(self.last_tile_knowledge)
+        if self.model.prestige_accrual == "harvested":
+            # accrue the harvested flow (knowledge just before farming * harvest rate)
+            self.increase_prestige(knowledge_before * self.model.harvest)
+        else:  # "post_tile": legacy rule, accrues the post-harvest tile value
+            self.increase_prestige(self.last_tile_knowledge)
 
 
 class MyModel(mesa.Model):
@@ -262,11 +266,11 @@ class MyModel(mesa.Model):
 
         for pos_x, pos_y in list(itertools.product(range(self.size), range(self.size))):
             val = self.grid.properties["knowledge"].data[pos_x, pos_y]
-            if not self.new_questions:
+            if self.knowledge_normalization == "share":
                 self.grid.properties["knowledge"].data[pos_x, pos_y] = (
                     val / self.total_initial_knowledge
                 )
-            else:
+            else:  # "minmax"
                 self.grid.properties["knowledge"].data[pos_x, pos_y] = (
                     val - min_knowledge
                 ) / (max_knowledge - min_knowledge) * 0.95 + 0.05
@@ -289,6 +293,7 @@ class MyModel(mesa.Model):
             coords = (self.rng.integers(0, self.size), self.rng.integers(0, self.size))
             a.age = self.rng.choice(np.arange(23, 50))
             self.grid.place_agent(a, coords)
+            self.grid.properties["explored"].data[coords] = True
             a.last_tile_knowledge = self.grid.properties["knowledge"].data[coords]
             a.current_local_merit = a.local_merit(a.pos)
 
@@ -313,8 +318,10 @@ class MyModel(mesa.Model):
         agent_generation_function: Callable[
             [np.float64, Generator, Dict], np.float64
         ] = lambda cur, rng, params: cur,
-        vanishing_factor_for_prestige: np.float64 = np.float64(0.0),
+        vanishing_factor_for_prestige: np.float64 = np.float64(0.9),
         use_visibility_reward: bool = True,
+        knowledge_normalization: str = "share",
+        prestige_accrual: str = "harvested",
     ):
         """parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc"""
         super().__init__(seed=agent_seed)
@@ -333,6 +340,19 @@ class MyModel(mesa.Model):
         self.step_limit = step_limit
         self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
         self.use_visibility_reward = use_visibility_reward
+        self.agent_generation_function = agent_generation_function
+        if knowledge_normalization not in ("share", "minmax"):
+            raise ValueError(
+                "knowledge_normalization must be 'share' or 'minmax', got "
+                + repr(knowledge_normalization)
+            )
+        self.knowledge_normalization = knowledge_normalization
+        if prestige_accrual not in ("harvested", "post_tile"):
+            raise ValueError(
+                "prestige_accrual must be 'harvested' or 'post_tile', got "
+                + repr(prestige_accrual)
+            )
+        self.prestige_accrual = prestige_accrual
 
         self.total_initial_knowledge = np.float64(0.0)
         self.avg_current_agent_knowledge = np.float64(0.0)
@@ -346,8 +366,8 @@ class MyModel(mesa.Model):
         self.explored_90_step = self._default_steps_thresholds
         self.weighted_50_step = self._default_steps_thresholds
         self.weighted_90_step = self._default_steps_thresholds
-        self.harvested_50_step = self._default_steps_thresholds
-        self.harvested_90_step = self._default_steps_thresholds
+        self.harvested_10_step = self._default_steps_thresholds
+        self.harvested_25_step = self._default_steps_thresholds
 
         self._init_grid(cell_init_function)
         self._init_agents(agent_generation_function)
@@ -514,7 +534,7 @@ class MyModel(mesa.Model):
             prestige_agent_tuples = [(a.prestige, a) for a in self._scientists]
             totalPrestige = sum([a.prestige for a in self._scientists])
             supervisors = []
-            for _ in range(agents_to_generate):
+            for _ in range(int(agents_to_generate)):
                 val = self.rng.uniform(0, totalPrestige)
                 for p, a in prestige_agent_tuples:
                     if val <= p:
@@ -522,7 +542,10 @@ class MyModel(mesa.Model):
                         break
                     val -= p
             for sup in supervisors:
-                a = Scientist(self, self.initial_curiosity, self.epsilon)
+                w = self.agent_generation_function(
+                    self.initial_curiosity, self.rng, self.generation_params
+                )
+                a = Scientist(self, w, self.epsilon)
                 coords = sup.pos
                 self.grid.place_agent(a, coords)
                 self._scientists.append(a)
@@ -547,8 +570,8 @@ class MyModel(mesa.Model):
             ("explored_90_step", "explored_percentage", 0.9),
             ("weighted_50_step", "explored_weighted_by_initial_knowledge", 0.5),
             ("weighted_90_step", "explored_weighted_by_initial_knowledge", 0.9),
-            ("harvested_50_step", "percentage_knowledge_harvested", 0.10),
-            ("harvested_90_step", "percentage_knowledge_harvested", 0.25),
+            ("harvested_10_step", "percentage_knowledge_harvested", 0.10),
+            ("harvested_25_step", "percentage_knowledge_harvested", 0.25),
         )
 
         for step_attr, metric_attr, threshold in milestones:
@@ -690,7 +713,7 @@ class MyModel(mesa.Model):
             cax = div.append_axes("right", "5%", "5%")
             div2 = make_axes_locatable(ax3)
             cax2 = div2.append_axes("right", "5%", "5%")
-            if self.new_questions:
+            if self.knowledge_normalization == "minmax":
                 im = ax.imshow(epistemicGrid, vmin=0, vmax=1)
             else:
                 im = ax.imshow(epistemicGrid)  # , vmin=0, vmax=1)

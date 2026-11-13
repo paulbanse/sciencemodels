@@ -7,7 +7,7 @@ import numpy as np
 # example of generation params for landscapefunctions.multipleGaussians :
 
 chosen_setup = (
-    3  # 0 for randominit, 1 for 2 gaussians, 2 for 6 gaussians, 3 for noisy gaussian
+    3  # 0 for randominit, 1 for 2 gaussians, 2 for 4 gaussians, 3 for noisy gaussian
 )
 generation_params = {}
 generation_function = landscapefunctions.randominit
@@ -47,7 +47,7 @@ all_params = {'n_agents':3,             # minimum 3
               "agent_seed": 1,                           # seed for the random of the agents
               "step_limit": 200,
               "agent_generation_function": landscapefunctions.uniform, # if this is not defined the function is just 
-              "vanishing_factor_for_prestige": 0.5,
+              "vanishing_factor_for_prestige": 0.9,
               "use_visibility_reward": True,
               }
 
