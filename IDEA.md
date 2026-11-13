@@ -37,6 +37,9 @@ already decided.
 - Autonomy (ruled 2026-11-13): experiments, sweeps, analysis runs and document
   authoring proceed without asking. Code restructuring and standing decisions
   ask first. Git: commit locally if it helps the task; never push.
+- Helpers (owner preference, 2026-11-13): the session drafts self-contained
+  helper prompts and hands them to the owner for dispatch instead of running
+  subagents itself; when helpers run, ADR-0001's dispatch clauses apply.
 - Session start: read this file, `AdmiralsLog/README.md`, the current month's
   log and the ADRs touching the area; report purpose, state of the workplan,
   open decisions and one proposed next action before acting.
@@ -103,8 +106,11 @@ here.
 - Frozen zones: as above; `context/` changes follow their authorisation row.
 - Document placement: plans and reviews in the `AdmiralsLog/` first level
   (HR-docs), records in `AdmiralsLog/` subfolders (MO-docs), documentation in
-  `docs/` (HR-docs); governance policy lives in the ADRs of
-  `AdmiralsLog/decisions/` (normative, drafted as ADR-0001 and ADR-0002).
+  `docs/` (HR-docs; long-standing conceptual documents only --- plan-like
+  documents move to the `AdmiralsLog/` first level at the latest when a
+  workplan supersedes them, owner ruling 2026-11-13); governance policy lives
+  in the ADRs of `AdmiralsLog/decisions/` (normative, drafted as ADR-0001 and
+  ADR-0002).
 - Naming: no spaces in filenames; record ids per the `AdmiralsLog/` charter;
   run outputs carry their parameter tags in the filename.
 - Generated artifacts: run outputs (`data/`) and compiled PDFs are never
@@ -127,11 +133,6 @@ here.
 
 # Open Questions and Known Gaps
 
-- Docs placement (ruling skipped 2026-11-13): `docs/way_forward.md` is
-  plan-like, but the charter says plans live in the `AdmiralsLog/` first
-  level. Options on the table: move it there as the workplan; keep all four
-  exploration docs in `docs/` and adapt this project's usage to the repo;
-  move all four. Nothing moves until ruled.
 - Branch and PR policy for the ruled code restructure: which branch it lands
   on and who opens the pull request (agents never push). One coordinated
   branch-PR was the ruled direction.

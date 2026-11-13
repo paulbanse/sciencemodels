@@ -8,6 +8,7 @@ tags: [way-forward, proxy-failure, collaborator-choice, abm, research-design]
 project: sciencemodels
 ---
 
+**Version 3** (November 2026)
 **Version 2** (November 2026)
 **Version 1** (November 2026)
 
@@ -101,7 +102,13 @@ Fix the audit findings that bias the quality-prestige interplay itself --- these
 Cost: small. Value: without this, every correlation we report is partly an
 artifact of inconsistent defaults.
 
-## Path A: The wedge --- calibrate the model to the empirical prestige gap
+## Path A: The wedge --- explore the mechanism against the documented empirical moments
+
+**Owner ruling (2026-11-13): no calibration of the model to empirical data at
+this point.** The empirical moments stay documented options
+(`connections_niklas.md`, `docs/calibration_moments.yaml`); this path is
+model-internal exploration --- which parameter regions produce a wedge-like
+decoupling --- not a fit to the data.
 
 No model extension. Run the existing model with entry activated, and ask
 whether the empirical signature emerges: a high prestige-quantity correlation
@@ -271,3 +278,4 @@ the mechanism.
 
 - **Version 1** (November 2026) --- Initial distillation from the exploration round of 2026-11-13.
 - **Version 2** (November 2026) --- Author clarification folded in: the collaborator bracket is deliberate sequencing, not a defect; Path 0 retitled measurement hygiene with entry activation moved to the front of Path B; added the sensitivity-map deliverable, the leaky-bracket caveat, and a Phase-1 paper skeleton.
+- **Version 3** (November 2026) --- Owner rulings folded: no calibration to empirical data at this point (Path A reframed as model-internal exploration of documented options); docs/ holds long-standing conceptual documents, plans move to the AdmiralsLog/ first level when a workplan supersedes them (this file is scheduled to move with the first workplan); helper prompts are handed to the owner for dispatch instead of the session spawning workers.

@@ -8,6 +8,7 @@ revision-vehicle: strikethrough
 revision-renders: "md, pdf, html"
 ---
 
+**Version 2** (November 2026)
 **Version 1** (November 2026)
 
 This memo surveys the reviewed repository `/workspace/git/niklasklann-project`
@@ -80,10 +81,14 @@ all analysis logic lives in the scripts.
 - Quantity output (the proxy): `future5`, papers in $t{+}1..t{+}5$ --- median 1, mean 1.35, p90 4, 48.5% zeros on the core window.
 - Quality output (the goal): `citedby_pct_age_norm`, the within-journal x year-cohort citation percentile of the author's $t{+}1..t{+}5$ papers, itself normalised by career age --- median 0.56, mean 0.54, coverage 25,653 of 50,830 core author-years.
 - Proxy-goal alignment: pooled corr(`future5`, `citedby_pct_age_norm`) is only 0.15 (Spearman 0.14) on the common sample --- quantity and quality are related but far from identical, which is exactly the gap a proxy-failure model needs to reproduce.
-- Co-authorship network structure: 5 x 5 rank-category O/E matrix (dyad-corrected elite cells 3.1 / 3.0 / 2.3 versus paper-level 2.8 / 2.8 / 2.1), team size (median 2, mean 2.65; collaboration index rising 1.6 to 2.4 over 1990--2018, collaborative share 46% to 79%), `repeated_collab_share` (mean 0.34), Markov chain C on elite network access (retention about 0.70, entry about 0.05; 12,417 authors, 40,037 transitions).
+- Co-authorship network structure: 5 x 5 rank-category O/E matrix (dyad-corrected elite cells 3.1 / 3.0 / 2.3 versus paper-level 2.8 / 2.8 / 2.1), team size (median 2, mean 2.65; collaboration index rising 1.6 to 2.4 over 1990--2018, collaborative share 46% to 79%), `repeated_collab_share` (mean 0.34), Markov chain C on elite network access (retention ~~about 0.70~~ 0.3995,
+entry ~~about 0.05~~ 0.0619 per the repo's pinned correction; 12,417 authors,
+40,037 transitions).
 - Complementarity and diversity: `mean_topical_closeness` (JEL-cosine fit with partners, median 0.79), `div_rank_sd` / `div_rank_gini` / `div_jel_entropy` / `div_upward_share`, `jel_shannon` author breadth.
-- Concentration: top-1% of authors hold 9.8% of career papers and 12.7% of the cumulative prestige stock; top-10% hold 40.8% and 55.5% respectively; thesis pipeline Gini about 0.85.
-- Treatment dynamics: the $A_{PF}$ event design (first elite partnership with low topical fit) records 2,661 treatments under definition B, of which 1,166 form the observable event sample; the joint wedge contrast (Gelman-Stern test) gives a quantity-quality coefficient difference of $-0.03$ SD with 95% CI $[-0.103, +0.044]$ --- a bound, not a rejection.
+- Concentration: top-1% of authors hold 9.8% of career papers and 12.7% of the cumulative prestige stock; top-10% hold 40.8% and 55.5% respectively; thesis pipeline Gini ~~about 0.85~~ 0.46 on the canonical career-output construction.
+- Treatment dynamics: the $A_{PF}$ event design (first elite partnership with low topical fit) records ~~2,661 treatments under definition B, of which 1,166 form the
+observable event sample~~ 2,731 recorded and 1,205 observable on
+re-derivation (data-revision drift from the reported figures); the joint wedge contrast (Gelman-Stern test) gives a quantity-quality coefficient difference of $-0.03$ SD with 95% CI $[-0.103, +0.044]$ --- a bound, not a rejection.
 
 # Mapping model variables to empirical counterparts
 
@@ -106,6 +111,12 @@ all analysis logic lives in the scripts.
 
 # Calibration and validation options
 
+**Owner ruling (2026-11-13): the model is not calibrated to empirical data at
+this point.** This section documents the options for doing so --- kept ready
+for later use. Measured values are pinned in `docs/calibration_moments.yaml`
+(10 of 16 moments re-derived from the canonical panel; four corrections to
+the menu below are recorded in v2 with prior values struck through).
+
 Each option names the moments it uses, whether they are calibration targets or
 held-out validation moments, and which ABM parameters they discipline. The
 practical recipe for all options is identical: run the model, rebuild a
@@ -116,21 +127,26 @@ simulated method of moments or approximate Bayesian computation.
 ## Option: calibrate the prestige wedge itself
 
 - Calibration moments: pooled corr(prestige, quantity) about 0.50 and corr(prestige, quality) about 0.07 on the same sample (own\_prestige version; the co-author-rank version is 0.19 versus 0.075).
-- Validation moments: the within-author near-zero prestige slope (M1b, $p = 0.79$) and the joint wedge bound $\lvert \Delta \rvert < 0.103$ SD from `joint_wedge_contrast.md`.
+- Validation moments: the within-author near-zero prestige slope (M1b's
+  coauth\_rank within-slope +0.004, $p = 0.79$ --- note the own\_prestige
+  within-author correlation measures -0.257, so the definition matters) and
+  the joint wedge bound $\lvert \Delta \rvert < 0.103$ SD from `joint_wedge_contrast.md`.
 - Disciplines: the reward exponent $1-c$ (visibility weight), the coupling of harvested knowledge to prestige accrual, and any prestige-bias parameter in collaborator choice.
 - Why it matters: this is the model's core claim expressed as two numbers the simulation must hit simultaneously; hitting one but not the other is the empirical signature of proxy failure, and the data pin both.
 
 ## Option: calibrate concentration and cumulative advantage
 
 - Calibration moments: top-1% and top-10% shares of career output (9.8% and 40.8%) and of prestige stock (12.7% and 55.5%), directly comparable to `top1pct_prestige_share` and `top10pct_prestige_share` in the Mesa DataCollector.
-- Validation moments: the output Gini (about 0.85 in the thesis pipeline) and the full career-output distribution (median 1, p90 5, p99 16 papers per author).
+- Validation moments: the output Gini (~~about 0.85 in the thesis pipeline~~
+  0.46 on the canonical construction; 0.85 was unpinned) and the full
+  career-output distribution (median 1, p90 5, p99 16 papers per author).
 - Disciplines: `harvest` (the per-step extraction rate), `epsilon` (noise in the reward measure), and the supervisor-proportional generation rule (which sets the skew of agent endowments).
 - Why it matters: heavy-tailed prestige is the observable footprint of the model's cumulative-advantage mechanism; if simulated concentration is flat, the mechanism is missing regardless of the correlation fit.
 
 ## Option: calibrate partner-choice structure
 
 - Calibration moments: team-size distribution (median 2, mean 2.65) and `repeated_collab_share` (mean 0.34, mass at 0 and at 1), plus the growth of the collaboration index from 1.6 to 2.4.
-- Validation moments: the dyad-corrected O/E elite homophily cells (3.1 / 3.0 / 2.3) and Markov chain C (retention 0.70, entry 0.05).
+- Validation moments: the dyad-corrected O/E elite homophily cells (3.1 / 3.0 / 2.3) and Markov chain C (retention ~~0.70~~ 0.3995, entry ~~0.05~~ 0.0619).
 - Disciplines: the visibility mechanism in partner selection, any assortativity or mixing parameter the collaborator-choice extension gains, and `initial_curiosity` via the exploration-exploitation mix.
 - Why it matters: homophily and club closure are the structural facts that make a prestige proxy *possible*; if the simulated network does not reproduce them, the proxy channel has no stage to act on.
 
@@ -144,7 +160,9 @@ simulated method of moments or approximate Bayesian computation.
 ## Option: hold dynamics out as the falsification battery
 
 - Calibration moments: none --- this option spends no moments on fitting.
-- Validation moments: the $A_{PF}$ event-study paths (treatment = first elite, low-fit collaboration; 2,661 treated, 1,166 observable events), treadmill escalation of `coauth_rank` over careers and calendar time, and the rarity of elite entry (0.05 per transition).
+- Validation moments: the $A_{PF}$ event-study paths (treatment = first elite,
+  low-fit collaboration; ~~2,661 treated, 1,166 observable events~~ 2,731
+  recorded, 1,205 observable on re-derivation), treadmill escalation of `coauth_rank` over careers and calendar time, and the rarity of elite entry (0.05 per transition).
 - Disciplines: nothing at fit time; it tests the fitted model's dynamic claims about proxy failure --- whether a first prestige-oriented collaboration in the simulation produces the same quantity-quality divergence pattern seen in the panel.
 - Why it matters: a proxy-failure model earns its keep on dynamics, not levels; this is the one option that can genuinely reject the mechanism.
 
@@ -154,20 +172,20 @@ simulated method of moments or approximate Bayesian computation.
 |---|---|---|
 | corr(prestige, future5), pooled | 0.50 | calibration |
 | corr(prestige, citedby\_pct\_age\_norm), pooled | 0.07 | calibration |
-| corr(prestige, future5), within-author | about 0 | validation |
+| corr(prestige, future5), within-author | ~~about 0~~ -0.257 (own\_prestige); the ~0 belongs to the coauth\_rank within-slope (+0.004) | validation |
 | Joint wedge contrast | -0.03 SD, CI -0.103 to +0.044 | validation (bound) |
 | Top-1% output share | 9.8% | calibration |
 | Top-10% output share | 40.8% | calibration |
 | Top-1% / top-10% prestige-stock shares | 12.7% / 55.5% | calibration |
-| Output Gini | about 0.85 | validation |
+| Output Gini | ~~about 0.85~~ 0.46 (canonical construction; 0.85 was an unpinned thesis-pipeline figure) | validation |
 | future5 zero share | 48.5% | calibration |
 | Team size mean | 2.65 | calibration |
 | Repeated-collaboration share | 0.34 | calibration |
 | O/E elite homophily (dyad-corrected) | 3.1 / 3.0 / 2.3 | validation |
-| Markov C retention / entry | 0.70 / 0.05 | validation |
+| Markov C retention / entry | ~~0.70 / 0.05~~ 0.3995 / 0.0619 (the sibling repo's own pinned correction) | validation |
 | corr(future5, citedby\_pct\_age\_norm) | 0.15 | validation |
 | Mean topical closeness with partners | 0.79 | validation |
-| Elite-entry event treatments | 2,661 recorded, 1,166 observable | validation |
+| Elite-entry event treatments | ~~2,661 / 1,166~~ 2,731 recorded, 1,205 observable (re-derived; data-revision drift) | validation |
 
 # Data-availability caveats
 
@@ -192,3 +210,4 @@ simulated method of moments or approximate Bayesian computation.
 # Revision Log
 
 - **Version 1** (November 2026) --- Initial memo connecting the Klann data to the ABM.
+- **Version 2** (November 2026) --- Errata pass against `docs/calibration_moments.yaml`: four menu values corrected (within-author slope definition, Markov C closure, output Gini, event-treatment counts) with prior values struck through; calibration reframed as documented options per the owner's ruling (2026-11-13, no calibration at this point).

@@ -194,6 +194,11 @@ class MyModel(mesa.Model):
 
         self.update_knowledge()
         self.updateIdealMerit()
+        # The reporters below are the model-side counterparts of the empirical
+        # moments documented in docs/calibration_moments.yaml. That file is an
+        # OPTION MENU only: per the owner's ruling (2026-11-13) the model is
+        # NOT calibrated to empirical data at this stage; the moments and their
+        # model counterparts are documented options for later use.
         self.datacollector = mesa.DataCollector(
             model_reporters={
                 "Step": lambda m: m.steps,

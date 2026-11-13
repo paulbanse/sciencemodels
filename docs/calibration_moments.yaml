@@ -1,3 +1,6 @@
+# NOTE (owner ruling, 2026-11-13): this file is an OPTION MENU. The model is
+# NOT calibrated to empirical data at this stage; the moments and their model
+# counterparts are documented options for later use, kept measured and honest.
 title: "Calibration and validation moments for the sciencemodels ABM (Klann empirical discipline)"
 version: 1
 date: 2026-11-13
