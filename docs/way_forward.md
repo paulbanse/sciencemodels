@@ -88,6 +88,11 @@ a methods note; claim three alone is a calibration exercise.
 
 ## Path 0: Measurement hygiene (prerequisite, not a path)
 
+**Completed 2026-11-13 (W1 round, `33421ff`): every item below is done** ---
+prestige accrual, normalization split, vanishing unification (0.9), milestone
+renames, newcomer curiosity routing --- plus founder-explored accounting and
+BUG-0001 (the newcomer path was not merely off, it crashed).
+
 Fix the audit findings that bias the quality-prestige interplay itself --- these are measurement questions about the Phase 1 object of study, not consequences of the collaboration bracket:
 
 - Prestige accrues from harvested flow $h \cdot k$ (or report both variants as

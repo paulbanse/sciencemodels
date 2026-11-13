@@ -1,6 +1,6 @@
 ---
 title: "Conceptual Degrees of Freedom: Catalogue of Modelling Assumptions"
-version: 1.0
+version: 2.0
 date: 2026-11-13
 tags: [sciencemodels, assumptions, sensitivity-analysis, proxy-failure]
 project: sciencemodels
@@ -8,7 +8,20 @@ revision-vehicle: strikethrough
 revision-renders: "md, pdf, html"
 ---
 
+**Version 2** (November 2026)
 **Version 1** (November 2026)
+
+v2 status note (2026-11-13): entries cite pre-restructure paths
+(`mesa_model.py` etc.); the code moved to the `sciencemodels/` package the
+same day (content preserved, see `5bd5c83`), so references map by module.
+The Path 0 hygiene round (`33421ff`) resolved several entries: prestige
+accrual now takes the harvested flow $h \cdot k$ (legacy via
+`prestige_accrual: 'post_tile'`); `new_questions` is split from
+`knowledge_normalization`; milestones are renamed `harvested_10_step` /
+`harvested_25_step`; newcomer curiosity runs through
+`agent_generation_function`; founder tiles count as explored; the vanishing
+factor is unified at 0.9 (the disagreement rows below are stale and struck).
+A full re-anchor of `file:line` references to the package layout is pending.
 
 ## Purpose
 
@@ -129,9 +142,9 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 | `mesa_model.py:204,207-210,82-83` | Prestige accrues from the tile's post-harvest value | `farm()` depletes first (line 204), then `increase_prestige(last_tile_knowledge)` where `last_tile_knowledge = (1-h)·k` | Prestige measures roughly the tile's standing knowledge, not the harvested flow $h\cdot k$; a measure-choice assumption on what counts as achievement |
 | `mesa_model.py:84-90` | `prestige_visibility` accrual | $\text{mean}_{i \neq self}\left[ value^{c_i} \cdot visibility_{self}^{1-c_i} \right]$ | Peer-perceived prestige: each other agent applies its own curiosity elasticity to the value; uses the earner's visibility, not the perceiver's distance |
 | `mesa_model.py:91` | *Dead / commented*: individual distances in `prestige_visibility` | comment on line 91 | Alternative weighting of the same accrual |
-| `mesa_model.py:92-99,316` | Vanishing prestige: exponential forgetting | $P_v \leftarrow x\cdot P_v + value$; `x = vanishing_factor_for_prestige`; $x = 1$ disables decay | How much past achievement still counts; $x = 0$ (constructor default) keeps only the latest harvest |
-| `runner.py:50` | Vanishing factor in interactive runs | `vanishing_factor_for_prestige: 0.5` | Half-life of one step in the prestige stock |
-| `bulk_runner.py:59` | Vanishing factor in bulk runs | `vanishing_factor_for_prestige: 0.9` | Long memory in the large sweep — different from `runner.py` |
+| `mesa_model.py:92-99,316` | Vanishing prestige: exponential forgetting | $P_v \leftarrow x\cdot P_v + value$; `x = vanishing_factor_for_prestige`; $x = 1$ disables decay | How much past achievement still counts; ~~$x = 0$ (constructor default) keeps only the latest harvest~~ constructor default now 0.9 (unified 2026-11-13) |
+| `runner.py:50` | Vanishing factor in interactive runs | ~~`vanishing_factor_for_prestige: 0.5`~~ 0.9 (unified 2026-11-13) | Half-life of one step in the prestige stock |
+| `bulk_runner.py:59` | Vanishing factor in bulk runs | `vanishing_factor_for_prestige: 0.9` | Long memory in the large sweep --- ~~different from `runner.py`~~ now the unified standard (2026-11-13) |
 | `mesa_model.py:453-497` | "Ideal merit" benchmark | greedy allocation of all agents to highest tiles with the same harvest factor; loss per agent matched by sorting, averaged per site | Counterfactual measure of how much an agent's placement costs the community |
 | `mesa_model.py:469,476-477` | Ideal benchmark assumes sequential multiplicative depletion | `know * (1 - harvest) ** redone` for stacking agents; ideal list depletes the same way | Fair comparison basis depends on the harvest functional form |
 | `mesa_model.py:455,497` | Snapshot timing | ideal merit computed from `previous_knowledge`, then current knowledge copied into it | Measures this step's harvest against the state at the step's start |
@@ -185,13 +198,13 @@ The paper question is proxy failure through collaborator choice: whether a commu
 
 - Supervisor-proportional entry (`mesa_model.py:514-523`) is the proxy channel itself. It is currently switched off (`agent_generation_time: 0` in both runners), so any proxy-failure claim requires activating and sweeping the entry rate.
 - Which prestige stock weights supervisor choice and visibility (`prestige` vs. `prestige_vanishing` vs. `prestige_visibility`; `mesa_model.py:121-133,514`) decides what the community treats as a quality signal — the Goodhart target.
-- The prestige accrual rule (`mesa_model.py:204-210`): prestige flows from post-harvest tile knowledge rather than harvested output. Changing this changes what "achievement" means and thus the proxy's informativeness.
+- The prestige accrual rule (`mesa_model.py:204-210`): ~~prestige flows from post-harvest tile knowledge rather than harvested output~~ prestige accrues from the harvested flow $h \cdot k$ since 2026-11-13 (Path 0; legacy rule via `prestige_accrual: 'post_tile'`). Changing this changes what "achievement" means and thus the proxy's informativeness.
 - The social term in the reward: `use_visibility_reward` and the prestige weighting of distance (`mesa_model.py:136-139`) determine how strongly agents chase proximity to prestigious peers at the cost of knowledge.
 - The Cobb-Douglas elasticity (curiosity, `mesa_model.py:143-145`) and the curiosity distribution (constant vs. Beta vs. uniform, `mesa_model.py:315`, `landscapefunctions.py:57-68`) govern how much agents trade knowledge for visibility and how heterogeneous the population is.
-- The vanishing factor (`mesa_model.py:92-99`) sets the memory of prestige; note the runners disagree (0.5 vs. 0.9) and the constructor default (0.0) is a third regime.
+- The vanishing factor (`mesa_model.py:92-99`) sets the memory of prestige; ~~note the runners disagree (0.5 vs 0.9) and the constructor default (0.0) is a third regime~~ unified at 0.9 on 2026-11-13 (Path 0); sweep it deliberately per `docs/sensitivity_map_v1.md` (found inert at the tested horizon, $\Delta \le 0.02$).
 - The harvest rate (`mesa_model.py:503-507`) drives depletion, crowding and hence the cost of herding onto prestigious locations.
 - Landscape family and shape parameters (`landscapefunctions.py`; `std`, `kappa`, `prop_random`, `number_gaussians`) control how legible research quality is — proxy failure should worsen when merit is harder to see.
-- Knowledge normalization (min-max $[0.05, 0.95]$ vs. share-of-total, `mesa_model.py:265-272`) and the 0.025 refill threshold (`mesa_model.py:536`) rescale every reward and prestige flow; the `new_questions` flag conflates normalization with refills and should be disentangled before any sensitivity study.
+- Knowledge normalization (min-max $[0.05, 0.95]$ vs. share-of-total, `mesa_model.py:265-272`) and the 0.025 refill threshold (`mesa_model.py:536`) rescale every reward and prestige flow; ~~the `new_questions` flag conflates normalization with refills and should be disentangled before any sensitivity study~~ the conflation was split on 2026-11-13 (Path 0): `knowledge_normalization` governs the scheme, `new_questions` the refill.
 - Decision noise $\epsilon$ and the noise asymmetry (`mesa_model.py:188-190,178-181`) plus the strict-improvement stay rule (`mesa_model.py:198`) set how boundedly rational the search is and bias agents toward inertia.
 
 Secondary but non-negligible: entry-position clustering (`mesa_model.py:526`), newcomer curiosity bypassing `agent_generation_function` (`mesa_model.py:525`), the exploratory-vs-exploited merit benchmarks (`local_merit`, `ideal_Merit`), and the harvested-milestone threshold mismatch (`mesa_model.py:550-551`) which affects reported speed measures but not the dynamics.
@@ -199,3 +212,4 @@ Secondary but non-negligible: entry-position clustering (`mesa_model.py:526`), n
 # Revision Log
 
 - **Version 1** (November 2026) --- Initial assumption catalogue, 104 entries.
+- **Version 2** (November 2026) --- Status note on the restructure and the Path 0 fixes; stale entries struck (vanishing-factor disagreement, post-harvest prestige accrual, the new_questions conflation); full `file:line` re-anchor pending.
