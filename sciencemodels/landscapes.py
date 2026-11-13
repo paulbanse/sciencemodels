@@ -10,12 +10,12 @@ import copy
 # self.model.grid.move_agent(self, new_position)
 
 
-def randominit(posX, posY, size, args, rng: Optional[np.random.Generator]):
+def randominit(posX, posY, size, args, rng: Optional[np.random.Generator] = None):
     rng = rng or np.random.default_rng()
     return rng.random()
 
 
-def Gaussian(posX, posY, size, args, rng: Optional[np.random.Generator]):
+def Gaussian(posX, posY, size, args, rng: Optional[np.random.Generator] = None):
     if "kappa" in args.keys():
         kappa = args["kappa"]
     else:
@@ -29,7 +29,7 @@ def Gaussian(posX, posY, size, args, rng: Optional[np.random.Generator]):
     return valX * valY
 
 
-def noisyGaussian(posX, posY, size, args, rng: Optional[np.random.Generator]):
+def noisyGaussian(posX, posY, size, args, rng: Optional[np.random.Generator] = None):
     """Requires args to contain prop_random"""
     prop_random = args["prop_random"]
     rng = rng or np.random.default_rng()
@@ -38,7 +38,7 @@ def noisyGaussian(posX, posY, size, args, rng: Optional[np.random.Generator]):
     return a + prop_random * b
 
 
-def multipleGaussians(posX, posY, size, args, rng: Optional[np.random.Generator]):
+def multipleGaussians(posX, posY, size, args, rng: Optional[np.random.Generator] = None):
     """Requires args to contain (number_gaussian) and seed"""
     number_gaussians = args["number_gaussians"]
 

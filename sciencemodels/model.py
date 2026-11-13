@@ -436,7 +436,7 @@ def generate_data_parametric_exploration(
 
     if not (longitudinal):
         print(filename + ".csv", intention)
-        needs_header = not (io.is_non_zero_file(filename))
+        needs_header = not (io.is_non_zero_file(filename + ".csv"))
         f = open(filename + ".csv", intention)
         writer = csv.writer(f)
         if needs_header or intention == "w":

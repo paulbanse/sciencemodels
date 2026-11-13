@@ -14,11 +14,15 @@ Canary run (3 agents, seeded, 30 steps) asserting:
 """
 import os
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import numpy as np
+
 from sciencemodels import MyModel
-from sciencemodels.landscapes import multipleGaussians, uniform
+from sciencemodels.landscapes import Gaussian, multipleGaussians, uniform
+from sciencemodels.model import generate_data_parametric_exploration
 
 CANARY_PARAMS = {
     "n_agents": 3,
@@ -76,6 +80,34 @@ def main():
     n_scientists = len(newcomer_model._scientists)
     assert n_scientists > 3, f"expected newcomers, got {n_scientists} scientists"
     print(f"newcomer run OK: {n_scientists} scientists after 20 steps")
+
+    # 4. regression BUG-0002: the landscape family takes rng=None, so the
+    #    legacy 4-argument call site works; Gaussian rebuilds from args["seed"]
+    gaussian_value = Gaussian(5, 5, 10, {"seed": 4, "std": 5})
+    assert isinstance(gaussian_value, float), type(gaussian_value)
+    assert np.isfinite(gaussian_value), gaussian_value
+    print(f"4-arg Gaussian OK: {gaussian_value!r} ({type(gaussian_value).__name__})")
+
+    # 5. regression BUG-0003: an append-mode run appends rows only - the
+    #    header check must test the path that is actually written (.csv)
+    with tempfile.TemporaryDirectory(prefix="smoke_append_", dir="/tmp") as tmp:
+        target = os.path.join(tmp, "append_header_check")
+        grid = dict(CANARY_PARAMS, step_limit=5)
+        generate_data_parametric_exploration(
+            target, grid, repeats_per_setting=1, intention="w"
+        )
+        generate_data_parametric_exploration(
+            target, grid, repeats_per_setting=1, intention="a"
+        )
+        with open(target + ".csv", newline="") as fh:
+            lines = fh.read().splitlines()
+    header, data_rows = lines[0], lines[1:]
+    assert lines.count(header) == 1, f"header appears {lines.count(header)} times"
+    assert len(data_rows) == 2, f"expected 2 data rows, got {len(data_rows)}"
+    print(
+        f"append-mode header check OK: {len(lines)} lines = "
+        f"1 header + {len(data_rows)} data rows"
+    )
 
     print("ALL SMOKE TESTS PASSED")
 
