@@ -1,0 +1,248 @@
+title: "Calibration and validation moments for the sciencemodels ABM (Klann empirical discipline)"
+version: 1
+date: 2026-11-13
+project: sciencemodels
+source_memo: "docs/connections_niklas.md (Moment menu, 16 rows)"
+data_interface: "/workspace/git/niklasklann-project/data/processed/panel_author_year_canonical.parquet and paper_metadata_canonical.parquet (Tier-3 canonical, ADR-0014; repo inspected READ-ONLY)"
+estimation_window: "in_core_window == True (identical to year <= 2013); 50,830 author-years, 25,498 authors"
+verification_conventions:
+  status_values: "re-derived = recomputed from the canonical parquet with pandas and matches the reported value within rounding; reported-unverified = quoted from a committed report or pinned log entry, not recomputed; mismatch: <measured> = my measured (or repo-pinned measured) value disagrees with the reported moment beyond rounding"
+  top_share_convention: "top k = ceil(pct/100 * n) units sorted descending; this convention reproduces the reported shares. The Mesa reporters top1pct_prestige_share / top10pct_prestige_share instead use the >= np.percentile(x, 100-pct) threshold convention, which yields slightly larger shares on the same data (noted per moment)."
+  measured_placement: "measured numbers are recorded in notes as 'measured: ...'; for mismatched moments the measured value also appears in verification_status"
+summary:
+  moments_total: 16
+  re_derived: 10
+  reported_only: 2
+  mismatched: 4
+moments:
+
+  - id: corr_prestige_future5_pooled
+    description: "Pooled Pearson correlation of prestige stock with future paper output (quantity proxy), all core-window author-years"
+    empirical_value: 0.50
+    role: calibration
+    source: "panel_author_year_canonical.parquet: own_prestige x future5, in_core_window"
+    derivation: "core = panel[panel.in_core_window == True]; core[['own_prestige','future5']].dropna().corr(method='pearson')"
+    verification_status: re-derived
+    model_counterpart: "DataCollector model_reporters['Corr_prestige_local_merit'] (vanishing/visibility variants: Corr_prestige_vanishing_local_merit, Corr_prestige_visibility_local_merit)"
+    notes: "measured: 0.4967 (N=50,830; Spearman 0.4680). Co-author-side variants measured: corr(coauth_rank_pct, future5)=0.1942 and corr(coauth_prestige, future5)=0.1780, consistent with the memo's 0.19 visibility variant (mapping table). The Mesa key reports the cross-agent correlation of current_local_merit with prestige at each step, so the empirical statistic must be rebuilt on a simulated author-year panel the same way."
+
+  - id: corr_prestige_citedby_pooled
+    description: "Pooled Pearson correlation of prestige stock with age-normalised citation impact (goal-side quality)"
+    empirical_value: 0.07
+    role: calibration
+    source: "panel_author_year_canonical.parquet: own_prestige x citedby_pct_age_norm, in_core_window"
+    derivation: "core = panel[panel.in_core_window == True]; core[['own_prestige','citedby_pct_age_norm']].dropna().corr(method='pearson')"
+    verification_status: re-derived
+    model_counterpart: "DataCollector model_reporters['Corr_prestige_ideal_merit'] (visibility variant: Corr_prestige_visibility_ideal_merit)"
+    notes: "measured: 0.0721 (N=25,653, the goal column's core-window coverage). Co-author-side variants measured: corr(coauth_prestige, citedby_pct_age_norm)=0.0691 and corr(coauth_rank_pct, citedby_pct_age_norm)=0.0753, matching the memo's 'both prestige measures 0.07' and the 0.075 coauthor-rank variant."
+
+  - id: corr_prestige_future5_within_author
+    description: "Within-author correlation of prestige with future output (the near-zero within slope in the M1b design)"
+    empirical_value: 0.0
+    role: validation
+    source: "panel_author_year_canonical.parquet: within-author demeaned own_prestige x future5; cited support M1b in output/models/M1_dual_outcome_pilot.md"
+    derivation: "d = core[['author','own_prestige','future5']].dropna(); keep authors with >=2 rows; corr(x - x.mean(author), y - y.mean(author))"
+    verification_status: "mismatch: -0.257"
+    model_counterpart: "no direct key; would need the correlation of within-agent deviations of prestige and current_local_merit on a simulated author-year panel (pooled analogue: Corr_prestige_local_merit)"
+    notes: >-
+      measured: -0.257 for own_prestige (N=34,494 rows / 9,162 authors; two-way
+      author+year demeaned -0.241). The menu's 'about 0' traces to M1b's
+      within-author Poisson FE slope on coauth_rank (beta=-1e-6, p=0.7916,
+      N=32,293, own_prestige and career_age controls) - and the coauth_rank_pct
+      demeaned corr does re-derive as ~0 (measured +0.0035; two-way +0.0049).
+      So 'about 0' holds for partner standing, not for own_prestige, where the
+      within-author correlation is clearly negative. Do not use 0.0 as an
+      own_prestige within target; decide which prestige measure the ABM's
+      within statistic should mirror.
+
+  - id: joint_wedge_contrast
+    description: "Gelman-Stern joint contrast of the quantity vs quality response to a prestige-oriented, low-fit collaboration (standardised units); a bound, not a rejection"
+    empirical_value: [-0.03, -0.103, 0.044]   # [delta SD, 95% CI low, 95% CI high]
+    role: validation
+    source: "output/models/joint_wedge_contrast.md (delta_3_K__standardized row)"
+    derivation: "reported only"
+    verification_status: reported-unverified
+    model_counterpart: "no single key; model-side analogue is the difference between the Corr_prestige_local_merit and Corr_prestige_ideal_merit responses after a first prestige-oriented move; post-hoc estimator scripts/cc_joint_wedge_contrast.py"
+    notes: >-
+      Committed report pins delta_3_K__standardized = -0.0297 SD, 95% CI
+      [-0.1033, +0.0439] (author-clustered SE 0.0376, p=0.429; two-way SE
+      0.0450, p=0.509) - matches the menu at rounding; figure quoted and
+      verified in the report, not recomputed from data/processed/ (requires
+      the estimator stack on its own sample: 21,388 common-support author-years,
+      0% zeros, intensive margin only). Validation use: reject a fitted model
+      whose |wedge| exceeds 0.103 SD; the interval contains zero.
+
+  - id: top1pct_output_share
+    description: "Share of career paper output held by the top 1% of authors"
+    empirical_value: 0.098
+    role: calibration
+    source: "panel_author_year_canonical.parquet: n_papers_t summed per author over the core window"
+    derivation: "career = core.groupby('author')['n_papers_t'].sum(); s = np.sort(career)[::-1]; s[:ceil(0.01*n)].sum()/s.sum()"
+    verification_status: re-derived
+    model_counterpart: "top1pct_prestige_share (the prestige-stock analogue is collected; an output-share reporter needs a per-agent harvested-knowledge or paper counter, not yet in the DataCollector)"
+    notes: >-
+      measured: 0.0987 (25,498 authors). The same construction reproduces the
+      memo's career-output anchors median 1 / p90 5 / p99 16 papers per author,
+      confirming the intended definition. Mesa's threshold convention (>= p99)
+      on the same data gives 0.103 - compare like with like when scoring runs.
+
+  - id: top10pct_output_share
+    description: "Share of career paper output held by the top 10% of authors"
+    empirical_value: 0.408
+    role: calibration
+    source: "panel_author_year_canonical.parquet: n_papers_t summed per author over the core window"
+    derivation: "career = core.groupby('author')['n_papers_t'].sum(); s = np.sort(career)[::-1]; s[:ceil(0.10*n)].sum()/s.sum()"
+    verification_status: re-derived
+    model_counterpart: "top10pct_prestige_share (see top1pct_output_share for the output-reporter gap)"
+    notes: "measured: 0.4084 (25,498 authors). Mesa threshold convention (>= p90) on the same data gives 0.424."
+
+  - id: prestige_stock_shares_top1_top10
+    description: "Shares of the cumulative prestige stock held by the top 1% and top 10% of the stock distribution"
+    empirical_value: [0.127, 0.555]
+    role: calibration
+    source: "panel_author_year_canonical.parquet: own_prestige across the 50,830 core author-years (author-year stock grain)"
+    derivation: "v = core['own_prestige']; s = np.sort(v)[::-1]; s[:ceil(0.01*n)].sum()/s.sum(), s[:ceil(0.10*n)].sum()/s.sum()"
+    verification_status: re-derived
+    model_counterpart: "top1pct_prestige_share / top10pct_prestige_share (per-step agent cross-section, same author-year stock grain)"
+    notes: >-
+      measured: 0.1268 / 0.5548 at the author-year (panel-row) level, matching
+      the reported 12.7% / 55.5% at rounding. Note the grain: the memo says
+      'top-1% of authors', but the reported numbers correspond to the
+      author-year stock distribution. The author-level alternative (last
+      own_prestige per author, career-end stock) measures 0.172 / 0.663 and
+      does NOT reproduce the reported values; use the author-year grain for
+      comparability with the Mesa reporters.
+
+  - id: output_gini
+    description: "Gini coefficient of career paper output per author"
+    empirical_value: 0.85
+    role: validation
+    source: "reported as 'thesis pipeline Gini about 0.85' (docs/connections_niklas.md, Concentration bullet); only pinned figure found: context/MA_Klann_Collaboration.md:69 'Gini 0.850 vs. 0.840' (own vs source pipeline, variable not named)"
+    derivation: "career = core.groupby('author')['n_papers_t'].sum(); gini via sorted-rank formula"
+    verification_status: "mismatch: 0.46"
+    model_counterpart: "none currently; scoring needs a simulated per-agent career-output distribution (harvested knowledge or paper counts), not in the DataCollector"
+    notes: >-
+      measured: 0.457 on the exact career-output construction that reproduces
+      the memo's own distribution anchors (median 1 / p90 5 / p99 16 and top
+      shares 9.8/40.8); 0.495 including the 2019-2023 panel block (35,021
+      authors). The reported ~0.85 is explicitly a raw 'thesis pipeline'
+      statistic (MA_Klann_Collaboration.md:69 pins 0.850 vs 0.840 without
+      naming the variable) and is not reproducible from data/processed/ under
+      any author-productivity reading. Nearest canonical relatives of 0.85:
+      Gini of career-end own_prestige stock = 0.82 (25,498 core authors) / 0.87
+      (all 35,021 panel authors). Recommend validating against the measured
+      0.46 career-output Gini unless the thesis-pipeline definition is
+      recovered; do not silently target 0.85.
+
+  - id: future5_zero_share
+    description: "Share of core author-years with zero papers in t+1..t+5 (the output zero-gate)"
+    empirical_value: 0.485
+    role: calibration
+    source: "panel_author_year_canonical.parquet: future5, in_core_window"
+    derivation: "(core['future5'] == 0).mean()"
+    verification_status: re-derived
+    model_counterpart: "none; the model has no zero-output gate or exit rule (percentage_knowledge_harvested is the aggregate flow). Needs an output-count step or hurdle in the harvest rule"
+    notes: "measured: 0.4853 (N=50,830). Companion distribution stats measured: mean 1.345, median 1, p90 4, max 26 (the menu's validation tails p90=4, max=26 re-derive on the same column)."
+
+  - id: team_size_mean
+    description: "Mean co-author team size on an author-year's papers"
+    empirical_value: 2.65
+    role: calibration
+    source: "panel_author_year_canonical.parquet: n_authors, in_core_window"
+    derivation: "core['n_authors'].mean()"
+    verification_status: re-derived
+    model_counterpart: "none; the ABM has no team-production or team-formation step (see docs/connections_niklas.md caveats) - requires the co-authorship extension. Nearest structural reporter: avg_distance_between_agents"
+    notes: "measured: 2.6461 (median 2, N=50,687 rows with n_authors non-NaN), matching the memo's 'median 2, mean 2.65'. Full-panel mean is 2.765 (includes the sparse 2019-2023 block)."
+
+  - id: repeated_collab_share
+    description: "Mean share of a year's co-authors who are repeated partners"
+    empirical_value: 0.34
+    role: calibration
+    source: "panel_author_year_canonical.parquet: repeated_collab_share, in_core_window"
+    derivation: "core['repeated_collab_share'].mean()"
+    verification_status: re-derived
+    model_counterpart: "none; needs the co-authorship/team-formation extension (partner memory in collaborator choice)"
+    notes: "measured: 0.3424 (N=50,687). Distribution shape matches the memo's 'mass at 0 and at 1': 51.4% zeros, 24.5% ones, median 0."
+
+  - id: oe_elite_homophily_dyad
+    description: "Dyad-corrected observed/expected same-rank-category tie ratios (institutional-rank diagonal, Top-5 / 6-10 / 11-20 cells)"
+    empirical_value: [3.1, 3.0, 2.3]
+    role: validation
+    source: "AdmiralsLog/archive/contributions/nemo-2026-11-09-assortative-structure-oe.md (dyad-level O/E diagonal, W8-pinned 2026-11-09)"
+    derivation: "reported only"
+    verification_status: reported-unverified
+    model_counterpart: "none; no co-authorship network or rank categories in the model - needs the team-formation/assortativity extension before this can discriminate"
+    notes: >-
+      W8 Python reimplementation of R/Analyse.Rmd:2250-2270 pins the dyad-level
+      diagonal at 3.096 / 3.000 / 2.277 (thesis prints 3.1 / 3.0 / 2.3),
+      agreeing with the menu at rounding; the paper-level event O/E diagonal is
+      2.799 / 2.813 / 2.128. Provenance: witnessed against MA_Klann.Rmd:504/:552,
+      tolerance <= 0.015 in cells from tie-breaking. No committed data artifact
+      exists and the construction is not reproducible from data/processed/
+      (needs the R pipeline's dyad/rank-category machinery), so the figure is
+      quoted, not re-derived.
+
+  - id: markov_c_retention_entry
+    description: "Markov chain C on elite network access: retention probability of elite access and entry probability from outside"
+    empirical_value: [0.70, 0.05]   # [retention, entry] as printed in the menu
+    role: validation
+    source: "AdmiralsLog/archive/contributions/nemo-2026-11-09-elite-club-markov-abc.md (Markov C transition counts, W8-pinned 2026-11-09)"
+    derivation: "reported only"
+    verification_status: "mismatch: retention 0.3995, entry 0.0619"
+    model_counterpart: "agent entry: the agent_generation_function / agent_generation_time supervisor-proportional generation rule; retention has no counterpart (the model has no elite-access state)"
+    notes: >-
+      The repo's own pinned reimplementation (12,417 authors, 40,037
+      transitions; No->No 33,836, No->Has 2,231, Has->Has 1,586, Has->No
+      2,384) gives entry 6.19% (2,231 of 36,067 non-elite author-periods) and
+      retention 39.95% (exit 60.05%), and explicitly records that the
+      'entry about 5%, retention about 70%' recollection in the menu is wrong
+      on both counts - the 70% traces to a thesis slip (MA_Klann.Rmd:1211
+      writes '6.2% entry and 39.9% exit'; :717 states the 60.1% loss
+      correctly). Not recomputed by me (transition construction lives in
+      R/Analyse.Rmd:1394-1478; no committed artifact). Do NOT target 0.70/0.05;
+      the measured 0.3995/0.0619 supersede them. Solo papers are excluded from
+      the chain, truncating the entry distribution's lower tail.
+
+  - id: corr_future5_citedby_pooled
+    description: "Pooled correlation of quantity (future5) with quality (citedby_pct_age_norm) - the baseline proxy-goal alignment"
+    empirical_value: 0.15
+    role: validation
+    source: "panel_author_year_canonical.parquet: future5 x citedby_pct_age_norm, in_core_window common sample"
+    derivation: "core[['future5','citedby_pct_age_norm']].dropna().corr(method='pearson')"
+    verification_status: re-derived
+    model_counterpart: "no key; the model-side analogue is the across-agent correlation of current_local_merit (quantity) with ideal_Merit (goal) at a step - ideal_Merit is computed (updateIdealMerit) but not in agent_reporters; add it to score this"
+    notes: "measured: 0.1491 (N=25,653; Spearman 0.1352, matching the memo's 0.14). This is the gap the proxy-failure mechanism must reproduce: quantity and quality related but far from identical."
+
+  - id: mean_topical_closeness_with_partners
+    description: "Typical JEL-cosine topical fit between an author and their year-t co-authors (variable mean_topical_closeness)"
+    empirical_value: 0.79
+    role: validation
+    source: "panel_author_year_canonical.parquet: mean_topical_closeness, in_core_window"
+    derivation: "core['mean_topical_closeness'].median()"
+    verification_status: re-derived
+    model_counterpart: "avg_distance_between_agents (the distance-based analogue per the mapping table; inverted sign - closeness vs distance)"
+    notes: >-
+      measured: median 0.7906 (matches 0.79 at rounding). Label caveat: the
+      menu row says 'Mean topical closeness ... | 0.79', but 0.79 is the
+      MEDIAN of the variable mean_topical_closeness (the memo body and mapping
+      table both say 'median 0.79'); the arithmetic mean measures 0.7263. The
+      column is median-filled at construction (cc_data_prep.add_complementarity,
+      JEL-cosine per dyad aggregated to author-year).
+
+  - id: elite_entry_event_treatments
+    description: "Definition-B elite-entry event design (first elite, low-fit collaboration): treatments recorded and treatments forming the observable event sample"
+    empirical_value: [2661, 1166]   # [recorded, observable]
+    role: validation
+    source: "output/models/event_study_summary.md (authors_recorded 2661 / authors_event 1166 rows, 'definition B, t <= 2013, pooled quartiles', pinned vs P-0007 ae796a2)"
+    derivation: "core = panel[panel.in_core_window == True]; recorded = authors with apf_meets==1 (first_meet per cc_data_prep treatment builder: coauth_rank_pct <= pooled 0.25-quantile cut and mean_topical_closeness <= pooled 0.25-quantile cut, in window); observable = authors with treatment_status=='event' (kept: >=1 pre-event year, min_pre_years=1)"
+    verification_status: "mismatch: 2731 recorded / 1205 observable"
+    model_counterpart: "none; the model has no treatment/event structure - this is the held-out falsification battery for a future collaborator-choice extension"
+    notes: >-
+      Re-derived from the canonical panel's own definition-B flags:
+      apf_meets==1 authors = 2,731 ('recorded'); treatment_status=='event'
+      authors = 1,205 ('observable'); always_treated = 1,526 (= 2,731-1,205,
+      internally consistent). The pinned report figures 2,661/1,166 come from
+      P-0007 (ae796a2), an earlier data revision; the current canonical panel
+      (ADR-0014) drifts by +70 recorded / +39 observable authors - beyond
+      rounding. If the event study is used as a falsification battery, rerun
+      cc_event_study on the canonical panel first and update the pins.
