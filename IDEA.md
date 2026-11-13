@@ -37,9 +37,8 @@ already decided.
 - Autonomy (ruled 2026-11-13): experiments, sweeps, analysis runs and document
   authoring proceed without asking. Code restructuring and standing decisions
   ask first. Git: commit locally if it helps the task; never push.
-- Helpers (owner preference, 2026-11-13): the session drafts self-contained
-  helper prompts and hands them to the owner for dispatch instead of running
-  subagents itself; when helpers run, ADR-0001's dispatch clauses apply.
+- Helper dispatch follows the scenario the owner prescribes in each request
+  (2026-11-13); there is no standing handover rule.
 - Session start: read this file, `AdmiralsLog/README.md`, the current month's
   log and the ADRs touching the area; report purpose, state of the workplan,
   open decisions and one proposed next action before acting.

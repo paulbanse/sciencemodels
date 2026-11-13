@@ -83,12 +83,10 @@ Standing clauses testable against any file or session action:
   - *Large artifacts:* run outputs stay untracked (`data/` gitignored);
     tracking anything large (LFS or otherwise) needs an explicit owner
     ruling.
-- **Dispatched helpers and workers.** The session drafts self-contained
-  helper prompts and hands them to the owner for dispatch rather than
-  spawning workers itself (owner preference, 2026-11-13). A prompt sent to a
-  helper names its input/output file boundaries and inherits this ADR; the
-  session verifies returned work against the definition of done and commits
-  it by pathspec.
+- **Dispatched helpers and workers.** A prompt sent to a helper or external
+  worker names its input/output file boundaries and inherits this ADR; the
+  dispatching session verifies the work against the definition of done and
+  commits it by pathspec.
 - **Foreign agents and frozen zones.** A foreign agent is greeted by
   `AGENTS.md`, which hands it to `IDEA.md`; collaborators' material lands in
   `AdmiralsLog/contributions/`, named by source and date. The frozen zone
