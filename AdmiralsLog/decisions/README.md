@@ -9,5 +9,5 @@ authoritative.
 
 | ADR | Title | Status |
 | --- | --- | --- |
-| ADR-0001 | Records layout and authority split for the multi-player environment | proposed |
-| ADR-0002 | Agent autonomy and git discipline | proposed |
+| ADR-0001 | Multiagent coordination (records, autonomy, git discipline) | proposed |
+| ADR-0002 | Coding style and reproducibility (notebooks vs scripts) | proposed |

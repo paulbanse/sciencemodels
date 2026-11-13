@@ -24,7 +24,7 @@ already decided.
   choice as the planned extension (see `docs/way_forward.md`).
 - Belongs here: the model code and runners, analysis notebooks and scripts,
   the background-literature corpus (`context/`), documentation (`docs/`), and
-  the project records (`AdmiralsLog/`), governance (`rules/`).
+  the project records (`AdmiralsLog/`, which also holds the governance ADRs).
 - Does not belong here: the empirical data and analyses of the sibling project
   `/workspace/git/niklasklann-project` (referenced read-only; connection memo
   in `docs/connections_niklas.md`); container-wide environment facts
@@ -61,7 +61,8 @@ already decided.
 | `docs/` | Documentation and supplementary documents | live |
 | `AdmiralsLog/` | Records: logs, decisions, bugs, ideas, unexplored, proposals, archive | live |
 | `AdmiralsLog/contributions/` | External contribution boundary (Franz, Paul, Niklas material) | live |
-| `rules/` | Governance policy: multiagent coordination and coding style | live |
+| `scripts/` | Future home of runner entry points and analysis scripts (born in the ruled restructure) | planned |
+| `notebooks/` | Future home of thin presentation notebooks (ruled restructure) | planned |
 | `helpers/` | Supporting tooling (created when its first file arrives) | planned |
 
 # Frozen Zones
@@ -102,7 +103,8 @@ here.
 - Frozen zones: as above; `context/` changes follow their authorisation row.
 - Document placement: plans and reviews in the `AdmiralsLog/` first level
   (HR-docs), records in `AdmiralsLog/` subfolders (MO-docs), documentation in
-  `docs/` (HR-docs), governance policy in `rules/` (MO-docs, normative).
+  `docs/` (HR-docs); governance policy lives in the ADRs of
+  `AdmiralsLog/decisions/` (normative, drafted as ADR-0001 and ADR-0002).
 - Naming: no spaces in filenames; record ids per the `AdmiralsLog/` charter;
   run outputs carry their parameter tags in the filename.
 - Generated artifacts: run outputs (`data/`) and compiled PDFs are never
