@@ -6,4 +6,4 @@ is authoritative.
 
 | BUG | Title | Status |
 | --- | --- | --- |
-| (none yet) | - | - |
+| BUG-0001 | Newcomer generation crashed for agent_generation_time > 0 | resolved (2026-11-13) |
