@@ -52,17 +52,16 @@ already decided.
 
 | Path | What it is | Status |
 | --- | --- | --- |
-| `mesa_model.py`, `landscapefunctions.py` | Model core (agent, model, metrics, landscape generators) | live; restructure ruled 2026-11-13, pending workplan |
-| `runner.py`, `bulk_runner.py` | Entry points: single animated run, parametric sweep | live |
-| `*.ipynb` (root) | Analysis notebooks (to become thin wrappers over scripts) | live |
+| `sciencemodels/` | Model package: agents, model, landscapes, metrics, viz, io, plotting | live (restructured 2026-11-13) |
+| `scripts/` | Entry points: `runner.py` (single animated run), `bulk_runner.py` (parametric sweep) | live |
+| `notebooks/` | Thin presentation notebooks over `sciencemodels.plotting` | live |
+| `tests/` | `test_smoke.py`, the seeded canary | live |
 | `old_experiments/` | One legacy notebook from earlier experiment generations | archive |
 | `context/` | Background literature corpus with `FROZEN.md` | frozen, read-only (see Frozen Zones) |
 | `data/` | Run outputs (CSV), gitignored | generated |
 | `docs/` | Documentation and supplementary documents | live |
 | `AdmiralsLog/` | Records: logs, decisions, bugs, ideas, unexplored, proposals, archive | live |
 | `AdmiralsLog/contributions/` | External contribution boundary (Franz, Paul, Niklas material) | live |
-| `scripts/` | Future home of runner entry points and analysis scripts (born in the ruled restructure) | planned |
-| `notebooks/` | Future home of thin presentation notebooks (ruled restructure) | planned |
 | `helpers/` | Supporting tooling (created when its first file arrives) | planned |
 
 # Frozen Zones
@@ -81,9 +80,10 @@ here.
   Project environment: `.venv` on the host, `/opt/hermes/.venv` in the
   container (mesa 3.2.0, numpy 2.3.2, scipy 1.16.1, matplotlib 3.10.6;
   joblib and pandas added 2026-11-13 as `>=` floors after a pipreqs miss).
-- Run: `python runner.py` (single animated run, matplotlib UI);
-  `python bulk_runner.py` (parametric sweep via joblib `Parallel`, writes
-  run-tagged CSVs under `data/<folder>/`).
+- Run: `python scripts/runner.py` (single animated run, matplotlib UI);
+  `python scripts/bulk_runner.py` (parametric sweep via joblib `Parallel`,
+  writes run-tagged CSVs under `data/<folder>/`). Smoke test:
+  `python tests/test_smoke.py`.
 - Notebooks via Jupyter; analysis reads CSVs from `data/`.
 - Data is tracked: none. `data/`, `*.csv`, `*.pdf`, `__pycache__/` are
   gitignored; the literature corpus and documentation are tracked.
@@ -137,8 +137,6 @@ here.
   branch-PR was the ruled direction.
 - `requirements.txt` exact pins for `joblib` and `pandas` should be
   regenerated from the host environment (currently `>=` floors).
-- Notebook hygiene folds into the restructure item: hardcoded legacy CSV
-  names (`data/testrun_*`), duplicated plotting helpers, stored outputs.
 - Model-level caveats (time-scale mapping, identifiability, the soft empirical
   wedge) are tracked in `docs/way_forward.md` and deliberately not duplicated
   here.

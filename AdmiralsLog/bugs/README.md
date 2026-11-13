@@ -7,4 +7,5 @@ holds known technical or conceptual dead ends (`DE-####-<slug>.md`).
 
 | BUG | Title | Status |
 | --- | --- | --- |
-| (none yet) | - | - |
+| BUG-0002 | Latent TypeError: landscapes.Gaussian called without rng in longitudinal notebook | open |
+| BUG-0003 | Sweep header check tests the wrong path (filename vs filename + .csv) | open |
