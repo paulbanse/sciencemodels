@@ -6,10 +6,10 @@ tags: [adr, coordination, multiagent, git, autonomy, records]
 project: "sciencemodels"
 ---
 
-- **Status:** proposed (drafted 2026-11-13 from the onboarding battery ruling; reworked the same day per the owner's correction that the general principles belong as ADRs in `decisions/`, not in a `rules/` folder; acceptance pending a ruling on this text)
+- **Status:** proposed (drafted 2026-11-13 from the onboarding battery ruling; reworked the same day per the owner's correction that the general principles belong as ADRs in `decisions/`, not in a `rules/` folder; reworked again per owner feedback: git discipline formulated generally, field-execution hygiene clauses added, adapted from MA_Klann ADR-0015; acceptance pending a ruling on this text)
 - **Date:** 2026-11-13
 - **Supersedes:** -
-- **Related:** `IDEA.md`, `AGENTS.md`, `AdmiralsLog/README.md`, ADR-0002
+- **Related:** `IDEA.md`, `AGENTS.md`, `AdmiralsLog/README.md`, ADR-0002; source of the field-execution clauses: `niklasklann-project/AdmiralsLog/decisions/accepted/ADR-0015-agent-coordination-and-execution-hygiene.md`
 - **Spawned:** the code-restructure workplan item (direction ruled 2026-11-13, plan pending)
 
 ## Context
@@ -42,9 +42,9 @@ Standing clauses testable against any file or session action:
   dated words in the log, not dressed up as ADRs. Records carry `Spawned:`
   downstream and `Related:` upstream.
 - **Git discipline.** `origin` is a collaborator's GitHub
-  (`paulbanse/sciencemodels`). Agents commit locally as
-  `perplexio <jakob.kapeller@jku.at>` when it helps the task and **never
-  push**; pushing is the owner's action from the host. In shared trees:
+  (`paulbanse/sciencemodels`). Agents commit locally under the identity their
+  environment configures when it helps the task and **never push**; pushing
+  is the owner's action from the host. In shared trees:
   re-check `git status` immediately before committing, commit by pathspec
   naming only this session's paths. No branch switches without asking; no
   history rewrite; nothing moved, renamed or deleted without explicit
@@ -59,6 +59,32 @@ Standing clauses testable against any file or session action:
   `data/` (gitignored); a run never overwrites another run's outputs;
   generated outputs are never hand-edited; committed artifacts change only
   through explicit, attributable edits.
+- **Field execution hygiene** (adapted from MA_Klann ADR-0015, accepted
+  2026-11-10 in the sibling project):
+  - *Contract-first boundaries:* task prompts and plans specify run
+    parameters, sample filters and data grain explicitly (which setups, which
+    seeds, which columns), never by bare counts; reports name gross requested
+    versus net completed units.
+  - *Mandatory checkpointing:* any iterative computation (sweeps, bootstrap
+    loops, parameter grids) persists state per completed iteration and skips
+    completed work on restart; a timeout loses at most one iteration.
+  - *Separation of concerns via the CSV interface:* simulation code writes
+    `data/` CSVs, analysis code reads them; no analysis logic inside the
+    model, no model logic inside notebooks, and no empirical or model number
+    is hand-transcribed into a document without naming its run.
+  - *In-run canaries:* a runner or sweep self-checks a seeded benchmark
+    before producing new variants and terminates loudly on drift instead of
+    writing bad outputs.
+  - *Process and memory hygiene:* parallel sweeps declare their job count
+    deliberately, orphaned processes are checked for before heavy launches,
+    and long runs clean up on termination.
+  - *Large artifacts:* run outputs stay untracked (`data/` gitignored);
+    tracking anything large (LFS or otherwise) needs an explicit owner
+    ruling.
+- **Dispatched helpers and workers.** A prompt sent to a helper or external
+  worker names its input/output file boundaries and inherits this ADR; the
+  dispatching session verifies the work against the definition of done and
+  commits it by pathspec.
 - **Foreign agents and frozen zones.** A foreign agent is greeted by
   `AGENTS.md`, which hands it to `IDEA.md`; collaborators' material lands in
   `AdmiralsLog/contributions/`, named by source and date. The frozen zone

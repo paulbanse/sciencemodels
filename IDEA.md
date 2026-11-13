@@ -94,9 +94,9 @@ here.
 # Rules for Folders, Files and Repos
 
 - Git: `origin` is `https://github.com/paulbanse/sciencemodels.git` (a
-  collaborator's GitHub). Agents commit locally as
-  `perplexio <jakob.kapeller@jku.at>` and **never push**; pushing is the
-  owner's action from the host. Commit by pathspec in shared trees; re-check
+  collaborator's GitHub). Agents commit locally under the identity their
+  environment configures and **never push**; pushing is the owner's action
+  from the host. Commit by pathspec in shared trees; re-check
   `git status` immediately before committing; never switch branches unasked.
   Current working branch is `jokoexplore` (exploration round); the default
   branch is `main`.
