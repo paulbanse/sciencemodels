@@ -1,13 +1,12 @@
 # sciencemodels
-Here is a project to model scientific exploration
 
-## To run:
-<<<<<<< HEAD
-install needed dependencies via pip using requirement.txt file (generated with pipreqs)
-use python to run runner.py
+Here is a project to model scientific exploration: an agent-based model (Mesa)
+of scientists searching an epistemic landscape, studying the interplay of
+quality and prestige and (in planned extensions) collaborator choice under
+proxy failure.
 
-=======
+## To run
 
-use python to run runner.py
-install needed dependencies via pip
->>>>>>> 99b59cbcee6b6893880972eb1b802e9f3d37cb7e
+Install needed dependencies via pip using the `requirements.txt` file
+(generated with pipreqs), then use python to run `runner.py` (interactive
+single run) or `bulk_runner.py` (parametric bulk sweep).
