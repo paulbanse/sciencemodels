@@ -74,8 +74,10 @@ BASELINE_SHA256 = "5ef483090225870b724ba3213580ea464a2aedf5347958a143b57d1933d52
 FRAMES = {
     "fresh_report": "data/figures_v1/run_number0.csv",
     "fresh_frame": "data/figures_v1/longitudinal_random/run_curiosity0.0_agent_seed0.csv",
-    "legacy_report": "data/testrun_corr-prestige-merit_seed4.csv",
-    "legacy_frame": "data/model_long_random.csv",
+    # pre-restructure fixtures, quarantined under data/legacy_2025_2026/ on
+    # 2026-11-14 (cleanup round); the shim's whole point is that these still read
+    "legacy_report": "data/legacy_2025_2026/testrun_corr-prestige-merit_seed4.csv",
+    "legacy_frame": "data/legacy_2025_2026/model_long_random.csv",
 }
 
 SIX_NOTEBOOKS = [

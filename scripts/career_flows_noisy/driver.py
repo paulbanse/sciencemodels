@@ -38,7 +38,6 @@ import os
 import subprocess
 import sys
 import time
-import traceback
 import warnings
 from datetime import datetime, timezone
 
@@ -53,32 +52,21 @@ warnings.simplefilter(action="ignore", category=FutureWarning)
 
 OUT = os.path.join(REPO, "data", "career_flows_noisy_v1")
 
-MODEL_TARGETS = [
-    "Corr_prestige_ideal_merit",
-    "Corr_prestige_local_merit",
-    "top10pct_prestige_share",
-    "explored_percentage",
-    "percentage_knowledge_harvested",
-    "mean_age",
-    "mean_prestige",
-]
+from sciencemodels.sweeps import (
+    CAREER_FIXED,
+    CAREER_LANDSCAPES,
+    MODEL_TARGETS,
+    career_measures_from_agent_vars,
+    run_one,
+)
 
-LANDSCAPES = {
-    "mgstd5": ("multipleGaussians", {"std": 5, "number_gaussians": 2}),
-    "noisypr5": ("noisyGaussian", {"prop_random": 5, "std": 5, "std_curiosity": 0.1}),
-}
+# Arm-local aliases: this driver's public names are unchanged, so its sibling
+# scripts (probe.py, audit_code_delta.py, remeasure_f5.py) keep importing the
+# same symbols from here. The one implementation lives in sciencemodels.sweeps
+# (ADR-0002: one home per measure).
+FIXED = CAREER_FIXED
+LANDSCAPES = CAREER_LANDSCAPES
 
-FIXED = {
-    "n_agents": 20,
-    "epsilon": 0.1,
-    "harvest": 0.02,
-    "grid_size": 20,
-    "use_distance": True,
-    "new_questions": 0,
-    "use_visibility_reward": True,
-    "knowledge_normalization": "share",
-    "prestige_accrual": "harvested",
-}
 
 SWEEP_NOISY = {
     "prefix": "noisyB",
@@ -98,74 +86,6 @@ SWEEP_CONTROL = {
     "step_limit": 200,
     "seeds": list(range(20)),
 }
-
-
-def run_one(landscape_fn, generation_params, curiosity, vanishing, gen_time,
-            step_limit, seed):
-    """One seeded run (verbatim from scripts/career_flows/career_flows_driver.py)."""
-    from sciencemodels import MyModel
-
-    try:
-        model = MyModel(
-            n_agents=FIXED["n_agents"],
-            initial_curiosity=curiosity,
-            epsilon=FIXED["epsilon"],
-            harvest=FIXED["harvest"],
-            grid_size=FIXED["grid_size"],
-            cell_init_function=landscape_fn,
-            generation_params=generation_params,
-            use_distance=FIXED["use_distance"],
-            agent_generation_time=gen_time,
-            new_questions=FIXED["new_questions"],
-            agent_seed=seed,
-            step_limit=step_limit,
-            vanishing_factor_for_prestige=vanishing,
-            use_visibility_reward=FIXED["use_visibility_reward"],
-            knowledge_normalization=FIXED["knowledge_normalization"],
-            prestige_accrual=FIXED["prestige_accrual"],
-        )
-        for _ in range(step_limit):
-            model.step(True)
-        mv = model.datacollector.get_model_vars_dataframe()
-        out = mv[["Step"] + MODEL_TARGETS].copy()
-        out.insert(0, "seed", seed)
-        n_final = len(model._scientists)
-        av = model.datacollector.get_agent_vars_dataframe()
-        return "ok", out, n_final, av
-    except Exception:
-        return "fail", traceback.format_exc(), None, None
-
-
-def career_measures_from_agent_vars(av, model_vars):
-    """Per-step population/career measures (verbatim from the T2 driver)."""
-    av = av.reset_index()
-    step_col = "Step" if "Step" in av.columns else av.columns[0]
-    id_col = None
-    for cand in ("agent_id", "AgentID", "agent"):
-        if cand in av.columns:
-            id_col = cand
-            break
-    if id_col is None:
-        id_col = [c for c in av.columns if c != step_col][0]
-    entry = av.groupby(id_col)[step_col].min().rename("entry_step")
-    av = av.merge(entry, left_on=id_col, right_index=True)
-    av["is_newcomer"] = av["entry_step"] > 0
-    g = av.groupby(step_col)
-    pop = g.size().rename("n_agents")
-    inc = av[~av.is_newcomer].groupby(step_col)["prestige"].mean().rename("incumbent_mean_prestige")
-    new = av[av.is_newcomer].groupby(step_col)["prestige"].mean().rename("newcomer_mean_prestige")
-    res = pd.concat([pop, inc, new], axis=1)
-    res["newcomer_mean_prestige"] = res["newcomer_mean_prestige"].fillna(0.0)
-    res["prestige_gap"] = res["newcomer_mean_prestige"] - res["incumbent_mean_prestige"]
-    res["prestige_gap_ratio"] = np.where(
-        res["incumbent_mean_prestige"] > 0,
-        res["prestige_gap"] / res["incumbent_mean_prestige"], 0.0)
-    harvested = model_vars.set_index("Step")["percentage_knowledge_harvested"]
-    res["harvested_cum"] = harvested.reindex(res.index).fillna(0.0)
-    res["harvest_flow"] = res["harvested_cum"].diff().fillna(0.0).clip(lower=0.0)
-    res["percap_harvest_cum"] = res["harvested_cum"] / res["n_agents"]
-    res["percap_harvest_flow"] = res["harvest_flow"] / res["n_agents"]
-    return res.reset_index().rename(columns={step_col: "Step"})
 
 
 def cell_tag(spec, cur, van, land, gen):
