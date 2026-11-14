@@ -7,4 +7,5 @@ holds known technical or conceptual dead ends (`DE-####-<slug>.md`).
 
 | BUG | Title | Status |
 | --- | --- | --- |
-| (none open) | - | - |
+| BUG-0004 | Dead incrPrestige definition swallowed by comment on agents.py distance line | open |
+| BUG-0005 | bulk_runner setup comment places the 6-Gaussian preset wrongly | open |
