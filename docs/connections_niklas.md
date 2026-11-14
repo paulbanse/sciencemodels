@@ -105,7 +105,7 @@ re-derivation (data-revision drift from the reported figures); the joint wedge c
 | `percentage_knowledge_harvested` | system output flow | papers per author-year (mean 1.15 in $t$) |
 | `explored_percentage` | topical breadth of the field | `div_jel_entropy`, `jel_shannon`, `div_upward_share` |
 | `avg_distance_between_agents` | topical distance between collaborators | `mean_topical_closeness` (median 0.79) |
-| Agent entry (supervisor-proportional generation) | entry into the Top-30 system | Markov C entry 0.05, first-year mass (median career age 1) |
+| Agent entry (supervisor-proportional generation) | entry into the Top-30 system | Markov C entry ~~0.05~~ 0.0619, first-year mass (median career age 1) |
 | Reward normalisation by $\overline{k}$ | cohort and age normalisation | `citedby_pct_age_norm` construction (year x journal percentiles) |
 | Curiosity heterogeneity | career-age gradient of exploration | diversity and K by `career_age` bins |
 
@@ -162,7 +162,7 @@ simulated method of moments or approximate Bayesian computation.
 - Calibration moments: none --- this option spends no moments on fitting.
 - Validation moments: the $A_{PF}$ event-study paths (treatment = first elite,
   low-fit collaboration; ~~2,661 treated, 1,166 observable events~~ 2,731
-  recorded, 1,205 observable on re-derivation), treadmill escalation of `coauth_rank` over careers and calendar time, and the rarity of elite entry (0.05 per transition).
+  recorded, 1,205 observable on re-derivation), treadmill escalation of `coauth_rank` over careers and calendar time, and the rarity of elite entry (~~0.05~~ 0.0619 per transition).
 - Disciplines: nothing at fit time; it tests the fitted model's dynamic claims about proxy failure --- whether a first prestige-oriented collaboration in the simulation produces the same quantity-quality divergence pattern seen in the panel.
 - Why it matters: a proxy-failure model earns its keep on dynamics, not levels; this is the one option that can genuinely reject the mechanism.
 

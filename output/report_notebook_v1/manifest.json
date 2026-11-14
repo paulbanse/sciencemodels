@@ -1,0 +1,70 @@
+{
+  "notebook": "notebooks/round_results_report_v1.ipynb",
+  "code_cells": 8,
+  "executed": true,
+  "rounds": [
+    {
+      "round": "T1 sensitivity (post-audit arm)",
+      "gross": "36 cells x 20 seeds = 720",
+      "net": "720 runs in data/remeasure_v1/runs.csv (F1); 720 pre-fix runs (F5 pre arm)"
+    },
+    {
+      "round": "T3 career flows (clean + noisy)",
+      "gross": "9 + 9 cells x 20 seeds = 360",
+      "net": "9 + 9 cells, 180 + 180 seeds"
+    },
+    {
+      "round": "T4 welfare probe",
+      "gross": "40 cells x 20 seeds = 800",
+      "net": "800 runs"
+    },
+    {
+      "round": "W3-A prestige stock",
+      "gross": "36 cells x 20 seeds = 720",
+      "net": "36 cells x 720 seeds"
+    },
+    {
+      "round": "N1/N2 re-measure",
+      "gross": "1,520 runs (76 cells)",
+      "net": "720 T1 pairs + 800 W_v05 pairs (W arm excluded: 0)"
+    }
+  ],
+  "remeasure": {
+    "post_gross": "1520",
+    "t1_paired_net": "720",
+    "w_paired_net": "0",
+    "w_excluded": "W arm re-run at vanishing [np.float64(0.9)] against [np.float64(0.5)] in the original sweep -- two changes at once, delta not attributable to the pairing fix",
+    "w_post_rows": "800",
+    "w_pre_rows": "800",
+    "wedge_sign": "runs.csv stores c_ideal - c_local; both arms recomputed as c_local - c_ideal before differencing",
+    "w_v05_file": "data/remeasure_v1/w_v05_runs.csv",
+    "w_v05_present": "True",
+    "w_v05_paired_net": "800"
+  },
+  "figures": [
+    {
+      "path": "output/report_notebook_v1/F1_sensitivity_entry_curiosity.png",
+      "bytes": 103503
+    },
+    {
+      "path": "output/report_notebook_v1/F2_career_flows_gap_ratio.png",
+      "bytes": 90948
+    },
+    {
+      "path": "output/report_notebook_v1/F2b_career_flows_noisy_vs_clean.png",
+      "bytes": 88822
+    },
+    {
+      "path": "output/report_notebook_v1/F3_welfare_loss_vs_visibility_weight.png",
+      "bytes": 115797
+    },
+    {
+      "path": "output/report_notebook_v1/F4_prestige_stock_wedge_matrix.png",
+      "bytes": 102682
+    },
+    {
+      "path": "output/report_notebook_v1/F5_pairing_audit_paired_delta.png",
+      "bytes": 90950
+    }
+  ]
+}

@@ -1,13 +1,14 @@
 ---
 title: "Way Forward: Exploration Paths from the Proxy-Failure ABM to a Paper"
-version: 1.0
-date: 2026-11-13
+version: 4.0
+date: 2026-11-14
 revision-vehicle: strikethrough
 revision-renders: "md, pdf, html"
 tags: [way-forward, proxy-failure, collaborator-choice, abm, research-design]
 project: sciencemodels
 ---
 
+**Version 4** (November 2026)
 **Version 3** (November 2026)
 **Version 2** (November 2026)
 **Version 1** (November 2026)
@@ -31,9 +32,9 @@ and the reporting layer measures how far prestige tracks merit
 should govern every decision below.
 
 - The collaborator channel is deliberately bracketed. ~~The proxy channel is switched off.~~ Supervisor-proportional entry
-  (`mesa_model.py:514-523`) --- the literal "choose the prestigious
+  (~~`mesa_model.py:514-523`~~ `sciencemodels/model.py:389-420`) --- the literal "choose the prestigious
   collaborator" mechanism --- does not run (`agent_generation_time = 0` in
-  both `runner.py` and `bulk_runner.py`) **by design**: the project sequenced
+  both `scripts/runner.py` and `scripts/bulk_runner.py`) **by design**: the project sequenced
   the quality-prestige interplay before introducing collaboration as a
   distinct element, and wants the impact of alternative modelling choices
   understood first (author clarification, 2026-11-13). The sequencing is
@@ -43,25 +44,25 @@ should govern every decision below.
   (`use_visibility_reward = True` weights proximity by peers' prestige), so
   prestige-mediated *attention* is active while dyadic *choice*, team
   production, and credit sharing are not.
-- Collaborator choice exists only by implication. The visibility term pulls
+- Collaborator choice exists only by implication *(pre-Path-B baseline; explicit dyadic layer added in `sciencemodels/` and probed in `output/reports/path_b_probe_v1.md`, 2026-11-14, gated off by default)*. The visibility term pulls
   agents toward prestigious company, and prestige-proportional supervisors
   assign newcomers, but there is no dyadic choice, no team production, and no
-  co-authorship object in the model. The data we want to discipline against
+  co-authorship object in the baseline model. The data we want to discipline against
   (Klann panel) observe collaboration at the paper level. This structural
   mismatch is the single most consequential gap.
-- Several measurement choices bend the very quantity we want to study.
+- ~~Several measurement choices bend the very quantity we want to study.
   Prestige accrues from the post-harvest tile value rather than the harvested
   flow (`mesa_model.py:204-210`); the `new_questions` flag conflates knowledge
   normalization with the refill mechanism; the prestige memory constant
   disagrees across configurations (0.0 / 0.5 / 0.9); newcomers bypass the
   curiosity generator. These are fixable in days and each changes the
-  prestige-merit correlation we report.
+  prestige-merit correlation we report.~~ *(Resolved in Path 0 / `33421ff` and the N1/N2 pairing audit `d3503ac`; verified in `output/reports/remeasure_v1.md`.)*
 
 Against this, the exploration round produced three assets: a verified map of
-34 related studies showing the niche is real and unoccupied (no existing model
+~~34~~ 46 related studies (`docs/related_publications.md` v2.0) showing the niche is real and unoccupied (no existing model
 combines landscape search, visibility-proxy incentives, and partner selection
-scored against an ideal allocation); a 104-entry catalogue of every modelling
-assumption with its conceptual role; and an empirical anchor world --- the
+scored against an ideal allocation); a ~~104~~ 106-entry catalogue of every modelling
+assumption with its conceptual role (`docs/conceptual_degrees_of_freedom.md` v5.0); and an empirical anchor world --- the
 Klann co-authorship panel --- whose prestige wedge (corr(prestige, quantity)
 $\approx$ 0.50 versus corr(prestige, quality) $\approx$ 0.07) is precisely the
 signature the model claims to explain.
@@ -153,7 +154,7 @@ credit. This puts the paper's title noun --- the collaborator --- into the
 model as an actor, and unlocks the team moments the Klann panel observes:
 team-size distribution (mean 2.65), repeated-collaboration share (0.34),
 rank-homophily O/E cells (3.1 / 3.0 / 2.3), and Markov club closure
-(retention 0.70, entry 0.05).
+(retention ~~0.70, entry 0.05~~ 0.3995, entry 0.0619; Markov A top-10% is 0.71 / 0.054).
 
 - Moments: team structure (calibration); homophily and closure (validation).
 - Deliverable: the flagship paper --- proxy failure *through* collaborator
@@ -199,7 +200,7 @@ role; the mapping in brief:
 | Path | Calibration moments | Held-out validation |
 |---|---|---|
 | A | wedge pair (0.50 / 0.07), top-1% and top-10% shares | within-author flatness, joint wedge bound |
-| B | team size 2.65, repeated collab 0.34 | O/E homophily 3.1/3.0/2.3, Markov 0.70/0.05 |
+| B | team size 2.65, repeated collab 0.34 | O/E homophily 3.1/3.0/2.3, Markov ~~0.70/0.05~~ 0.3995/0.0619 (C) & 0.71/0.054 (A) |
 | C | none (welfare is model-internal) | intervention analogues, event-study paths |
 | D | none | sign patterns of the $P$-$G$ decay by typology cell |
 
@@ -268,19 +269,22 @@ the mechanism.
 
 # Next actions
 
-- Run the Path 0 hygiene pass and re-run one `bulk_runner` setup to confirm
+**Status as of 2026-11-14 (Version 4):** All four initial exploration actions below are **completed**, and the Phase-1 paper draft (`output/reports/paper_phase1_v1.md`) plus the Path B Gate 2 probe (`output/reports/path_b_probe_v1.md`, verdict `PARTIAL`: choice layer binds in 8/8 contrasts, production moments invariant without movement coupling) have landed. The active Phase 1.5 queue lives in `AdmiralsLog/contributions/CONT1..CONT3` and `AdmiralsLog/proposals/P-0001..P-0006`:
+
+- ~~Run the Path 0 hygiene pass and re-run one `bulk_runner` setup to confirm
   the reported correlations move as predicted (this doubles as the audit's
-  validation).
-- Prototype Path A on the existing sweep machinery with entry activated; the
-  first figure to look at is the wedge pair against the visibility weight.
-- Sketch the Path B decision rule on paper (one paragraph of pseudocode)
+  validation).~~ *(Done: `33421ff`, `d3503ac`, `output/reports/remeasure_v1.md`.)*
+- ~~Prototype Path A on the existing sweep machinery with entry activated; the
+  first figure to look at is the wedge pair against the visibility weight.~~ *(Done: `output/reports/sensitivity_map_v1.md`, `career_flows_v1.md`, `career_flows_noisy_v1.md`, `prestige_stock_v1.md`, `welfare_probe_v1.md`, `notebooks/round_results_report_v1.ipynb`.)*
+- ~~Sketch the Path B decision rule on paper (one paragraph of pseudocode)
   before coding; the design trade-off (parsimony vs team moments) deserves a
-  decision, not an accident.
-- Extract the moment menu into a machine-readable calibration spec (YAML) so
-  every later run is scored against the same targets.
+  decision, not an accident.~~ *(Done: `docs/path_b_dyadic_sketch_v1.md` and `output/reports/path_b_probe_v1.md`.)*
+- ~~Extract the moment menu into a machine-readable calibration spec (YAML) so
+  every later run is scored against the same targets.~~ *(Done: `docs/calibration_moments.yaml`.)*
 
 # Revision Log
 
 - **Version 1** (November 2026) --- Initial distillation from the exploration round of 2026-11-13.
 - **Version 2** (November 2026) --- Author clarification folded in: the collaborator bracket is deliberate sequencing, not a defect; Path 0 retitled measurement hygiene with entry activation moved to the front of Path B; added the sensitivity-map deliverable, the leaky-bracket caveat, and a Phase-1 paper skeleton.
 - **Version 3** (November 2026) --- Owner rulings folded: no calibration to empirical data at this point (Path A reframed as model-internal exploration of documented options); docs/ holds long-standing conceptual documents, plans move to the AdmiralsLog/ first level when a workplan supersedes them (this file is scheduled to move with the first workplan).
+- **Version 4** (November 2026) --- Relocated from `docs/way_forward.md` to `AdmiralsLog/way_forward.md` per owner directive (2026-11-14); pre-restructure `mesa_model.py` anchors and Markov C `0.70/0.05` figures updated via strikethrough; initial Next Actions marked completed with pointers to `output/reports/{remeasure_v1,path_b_probe_v1,paper_phase1_v1}.md`, `AdmiralsLog/contributions/CONT1..CONT3`, and `AdmiralsLog/proposals/P-0001..P-0006`.

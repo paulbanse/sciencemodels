@@ -10,7 +10,7 @@ Before changing anything, read the authoritative orientation document:
 - `IDEA.md` - purpose, agent behaviour, folder structure, rules.
 
 Settled decisions live in `AdmiralsLog/decisions/` (`accepted/` and
-`rejected/`) and are binding. Governance policy lives in `rules/`.
+`rejected/`) and are binding. Governance policy lives in `AdmiralsLog/decisions/`.
 
 House-convention skills (`joko-project`, `md-style`, `md-style-corrections`)
 are indexed from `AdmiralsLog/skills/`.

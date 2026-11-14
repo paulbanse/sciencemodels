@@ -30,6 +30,8 @@ class Scientist(mesa.Agent):
     visibility: np.float64
     current_local_merit: np.float64
     pos: Coordinate
+    is_newcomer: bool
+    harvest_profile: np.ndarray
 
     def __init__(self, model, curiosity, epsilon):
         super().__init__(model)
@@ -44,6 +46,14 @@ class Scientist(mesa.Agent):
         self.visibility = 0
         self.current_local_merit = 0
         self.ideal_Merit= 0
+        # Path B dyadic state. The zero/false initialisation is
+        # dynamics-neutral (no rng, no feedback into the step rule): every
+        # reader is guarded behind dyadic_mode != "off" or
+        # closeness_mode == "profile_overlap".
+        self.is_newcomer = False
+        self.harvest_profile = np.zeros(model.size**2, dtype=np.float64)
+        self._pending_prestige = np.float64(0.0)
+        self._pending_tile = None
 
     def compute_distance(self, other_pos: tuple[int, int]) -> int:
         x1, y1 = self.pos
@@ -170,13 +180,25 @@ class Scientist(mesa.Agent):
             self.visibility = currentVis
 
         knowledge_before = self.model.compute_knowledge(self.pos)
-        self.model.farm(self.pos)  # farming also updates AvgAgentKnowledge
+        self.model.farm(self.pos, self)  # farming also updates AvgAgentKnowledge
 
         self.age += 1
         self.last_tile_knowledge = self.model.grid.properties["knowledge"].data[
             self.pos
         ]
-        if self.model.prestige_accrual == "harvested":
+        if self.model.credit_sharing == "equal_split":
+            # Path B Q8: buffer this step's accrual; the model pools and
+            # splits it among linked co-located agents in end_loop_update.
+            # (Accrual is therefore deferred to end-of-step under this rule
+            # only - a mechanics change inherent to pooling, disclosed.)
+            if self.model.prestige_accrual == "harvested":
+                self._pending_prestige = np.float64(
+                    knowledge_before * self.model.harvest
+                )
+            else:  # "post_tile": legacy rule, accrues the post-harvest tile value
+                self._pending_prestige = np.float64(self.last_tile_knowledge)
+            self._pending_tile = self.pos
+        elif self.model.prestige_accrual == "harvested":
             # accrue the harvested flow (knowledge just before farming * harvest rate)
             self.increase_prestige(knowledge_before * self.model.harvest)
         else:  # "post_tile": legacy rule, accrues the post-harvest tile value

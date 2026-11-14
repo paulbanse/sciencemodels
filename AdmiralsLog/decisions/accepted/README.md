@@ -6,4 +6,5 @@ is authoritative.
 
 | ADR | Title | Status |
 | --- | --- | --- |
-| (none yet) | - | - |
+| ADR-0001 | Multiagent coordination (records, autonomy, git discipline) | accepted |
+| ADR-0002 | Coding style and reproducibility (notebooks vs scripts) | accepted |

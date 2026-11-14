@@ -21,7 +21,7 @@ already decided.
   knowledge, accrue prestige and visibility, and the model measures how far
   prestige tracks merit. The research question is proxy failure in science,
   currently bracketed to the quality-prestige interplay, with collaborator
-  choice as the planned extension (see `docs/way_forward.md`).
+  choice as the planned extension (see `AdmiralsLog/way_forward.md`).
 - Belongs here: the model code and runners, analysis notebooks and scripts,
   the background-literature corpus (`context/`), documentation (`docs/`), and
   the project records (`AdmiralsLog/`, which also holds the governance ADRs).
@@ -30,7 +30,7 @@ already decided.
   in `docs/connections_niklas.md`); container-wide environment facts
   (`/workspace/AGENTS.md`).
 - Current state: the November 2026 exploration round is distilled in
-  `docs/way_forward.md`; status details live in `AdmiralsLog/`, never here.
+  `AdmiralsLog/way_forward.md` and `AdmiralsLog/HANDOVER-2026-11-14.md`; status details live in `AdmiralsLog/`, never here.
 
 # Agent Behaviour
 
@@ -128,7 +128,7 @@ here.
   UE for a parked strategic item; a P for a route or direction awaiting the
   owner's ruling; an archive move when a first-level document is superseded.
 - Ids are consecutive and never reused; counters currently: next ADR-0003,
-  BUG-0001, DE-0001, IE-0001, UE-0001, P-0001.
+  BUG-0006, CONT4, DE-0001, IE-0001, UE-0001, P-0007.
 - Every session leaves one entry in `AdmiralsLog/logs/<YYYY-MM>.md`
   (append-only).
 
@@ -140,5 +140,5 @@ here.
 - `requirements.txt` exact pins for `joblib` and `pandas` should be
   regenerated from the host environment (currently `>=` floors).
 - Model-level caveats (time-scale mapping, identifiability, the soft empirical
-  wedge) are tracked in `docs/way_forward.md` and deliberately not duplicated
+  wedge) are tracked in `AdmiralsLog/way_forward.md` and deliberately not duplicated
   here.

@@ -6,7 +6,7 @@ tags: [adr, coding-style, reproducibility, notebooks, scripts]
 project: "sciencemodels"
 ---
 
-- **Status:** proposed (drafted 2026-11-13 from the owner's request for general coding principles; reworked the same day per the owner's correction that the principles belong as ADRs in `decisions/`, not in a `rules/` folder; acceptance pending a ruling on this text)
+- **Status:** accepted (ruled 2026-11-14; drafted 2026-11-13 from the owner's request for general coding principles; reworked the same day per the owner's correction that the principles belong as ADRs in `decisions/`, not in a `rules/` folder)
 - **Date:** 2026-11-13
 - **Supersedes:** -
 - **Related:** ADR-0001, `docs/conceptual_degrees_of_freedom.md`, `mesa_model.py`, `runner.py`, `bulk_runner.py`
@@ -64,5 +64,5 @@ first line even in the old layout.
 
 A review that finds computing cells in notebooks, duplicated helpers,
 unseeded RNGs or unpinned new dependencies reports the violation in the month
-log; the restructure PR is checked against every clause before merge. This
-draft stays at the `decisions/` top level until the owner rules on its text.
+log; the restructure PR is checked against every clause before merge. Ruled
+accepted on 2026-11-14 and moved to `decisions/accepted/`.

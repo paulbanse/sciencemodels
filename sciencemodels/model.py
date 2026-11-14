@@ -39,6 +39,13 @@ class MyModel(mesa.Model):
     avg_current_agent_knowledge: np.float64
     agent_avg_distance: np.float64
     entry_prestige_stock: str
+    dyadic_mode: str
+    dyadic_lambda: np.float64
+    dyadic_proposal_regime: str
+    credit_sharing: str
+    closeness_mode: str
+    dyadic_visibility_stock: str
+    links: set
 
     def _init_grid(
         self, cell_init_function: Callable[[int, int, int, Any, Generator]]
@@ -134,6 +141,12 @@ class MyModel(mesa.Model):
         knowledge_normalization: str = "share",
         prestige_accrual: str = "harvested",
         entry_prestige_stock: str = "prestige",
+        dyadic_mode: str = "off",
+        dyadic_lambda: float = 0.5,
+        dyadic_proposal_regime: str = "newcomer",
+        credit_sharing: str = "structural",
+        closeness_mode: str = "grid",
+        dyadic_visibility_stock: str = "prestige_visibility",
     ):
         """parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc"""
         super().__init__(seed=agent_seed)
@@ -173,6 +186,60 @@ class MyModel(mesa.Model):
                 " or 'prestige_visibility', got " + repr(entry_prestige_stock)
             )
         self.entry_prestige_stock = entry_prestige_stock
+        if dyadic_mode not in ("off", "logit", "threshold"):
+            raise ValueError(
+                "dyadic_mode must be 'off', 'logit' or 'threshold', got "
+                + repr(dyadic_mode)
+            )
+        if not (0.0 <= dyadic_lambda <= 1.0):
+            raise ValueError(
+                "dyadic_lambda must be in [0, 1], got " + repr(dyadic_lambda)
+            )
+        if dyadic_proposal_regime not in ("newcomer", "universal"):
+            raise ValueError(
+                "dyadic_proposal_regime must be 'newcomer' or 'universal', got "
+                + repr(dyadic_proposal_regime)
+            )
+        if credit_sharing not in ("structural", "equal_split"):
+            raise ValueError(
+                "credit_sharing must be 'structural' or 'equal_split', got "
+                + repr(credit_sharing)
+            )
+        if closeness_mode not in ("grid", "profile_overlap"):
+            raise ValueError(
+                "closeness_mode must be 'grid' or 'profile_overlap', got "
+                + repr(closeness_mode)
+            )
+        if dyadic_visibility_stock not in (
+            "prestige_visibility", "prestige", "prestige_vanishing", "entry"
+        ):
+            raise ValueError(
+                "dyadic_visibility_stock must be 'prestige_visibility',"
+                " 'prestige', 'prestige_vanishing' or 'entry', got "
+                + repr(dyadic_visibility_stock)
+            )
+        self.dyadic_mode = dyadic_mode
+        self.dyadic_lambda = np.float64(dyadic_lambda)
+        self.dyadic_proposal_regime = dyadic_proposal_regime
+        self.credit_sharing = credit_sharing
+        self.closeness_mode = closeness_mode
+        self.dyadic_visibility_stock = dyadic_visibility_stock
+        # Path B dyadic state: the declared (choice) link set, the per-step
+        # co-harvest (production) teams, and the four dyadic statistics.
+        # With dyadic_mode="off" no rng is consumed and no dynamic state
+        # changes - the pre-Path-B dynamics are bit-identical.
+        self.links = set()
+        self.teams = []
+        self._ever_active_pairs = set()
+        self._ever_active_links = set()
+        self._dyadic_stats = {
+            "mean_team_size": np.float64(0.0),
+            "repeated_collab_share": np.float64(0.0),
+            "dyadic_assortativity_prestige": np.float64(0.0),
+            "n_active_links": 0,
+            "link_repeated_share": np.float64(0.0),
+            "link_assortativity_prestige": np.float64(0.0),
+        }
 
         self.total_initial_knowledge = np.float64(0.0)
         self.avg_current_agent_knowledge = np.float64(0.0)
@@ -267,6 +334,12 @@ class MyModel(mesa.Model):
                 "Ideal_merit_cum": lambda m: np.mean(
                     [getattr(a, "ideal_merit_cum", 0.0) for a in m.agents]
                 ),
+                "mean_team_size": lambda m: m._dyadic_stats["mean_team_size"],
+                "repeated_collab_share": lambda m: m._dyadic_stats["repeated_collab_share"],
+                "dyadic_assortativity_prestige": lambda m: m._dyadic_stats["dyadic_assortativity_prestige"],
+                "n_active_links": lambda m: m._dyadic_stats["n_active_links"],
+                "link_repeated_share": lambda m: m._dyadic_stats["link_repeated_share"],
+                "link_assortativity_prestige": lambda m: m._dyadic_stats["link_assortativity_prestige"],
             },
             agent_reporters={
                 "prestige": "prestige",
@@ -276,6 +349,7 @@ class MyModel(mesa.Model):
                 "curiosity": "curiosity",
                 "local_merit": "current_local_merit",
                 "ideal_merit_cum": "ideal_merit_cum",
+                "is_newcomer": "is_newcomer",
             },
         )
         self.end_loop_update()
@@ -300,10 +374,17 @@ class MyModel(mesa.Model):
         posX, posY = pos
         return self.grid.properties["knowledge"].data[posX, posY]
 
-    def farm(self, pos):
-        self.grid.properties["knowledge"].data[pos] = self.grid.properties[
-            "knowledge"
-        ].data[pos] * (1 - self.harvest)
+    def farm(self, pos, agent=None):
+        knowledge_before = self.grid.properties["knowledge"].data[pos]
+        self.grid.properties["knowledge"].data[pos] = (
+            knowledge_before * (1 - self.harvest)
+        )
+        if agent is not None and self.closeness_mode == "profile_overlap":
+            # Path B Q2: per-agent flow-weighted harvest profile, consumed
+            # by the profile_overlap closeness mode only
+            agent.harvest_profile[pos[0] * self.size + pos[1]] += (
+                knowledge_before * self.harvest
+            )
         self.update_knowledge()
 
     def __generate_new_agents(self):
@@ -333,11 +414,50 @@ class MyModel(mesa.Model):
                 # final-wave newcomers, for whom no updateIdealMerit follows
                 # their birth (agents.py is outside this round's edit boundary)
                 a.ideal_merit_cum = np.float64(0.0)
+                # Path B Q5: permanent newcomer flag (proposal regime)
+                a.is_newcomer = True
                 coords = sup.pos
                 self.grid.place_agent(a, coords)
                 self._scientists.append(a)
             for agent in self._scientists:
                 self.grid.properties["explored"].data[agent.pos] = True
+
+    def _redistribute_equal_split(self):
+        """Path B Q8: pool each tile's buffered prestige accrual among the
+        tile's LINKED co-located agents and credit the equal split. Agents
+        with no link to any co-located peer keep their own accrual. Called
+        once per step from end_loop_update, before the dyadic scores, so
+        partner scores see the split prestige."""
+        by_tile = {}
+        for a in self._scientists:
+            if a._pending_tile is None:
+                continue
+            by_tile.setdefault(a._pending_tile, []).append(a)
+        for agents_on_tile in by_tile.values():
+            linked = [
+                a
+                for a in agents_on_tile
+                if any(
+                    frozenset((a.unique_id, b.unique_id)) in self.links
+                    for b in agents_on_tile
+                    if b is not a
+                )
+            ]
+            if len(linked) >= 2:
+                pool = np.float64(
+                    sum(a._pending_prestige for a in linked) / len(linked)
+                )
+                for a in linked:
+                    a.increase_prestige(pool)
+                for a in agents_on_tile:
+                    if a not in linked:
+                        a.increase_prestige(a._pending_prestige)
+            else:
+                for a in agents_on_tile:
+                    a.increase_prestige(a._pending_prestige)
+            for a in agents_on_tile:
+                a._pending_prestige = np.float64(0.0)
+                a._pending_tile = None
 
     def _generate_new_questions(self):
         if self.new_questions:
@@ -352,8 +472,14 @@ class MyModel(mesa.Model):
         return metrics.update_step_goals(self)
 
     def end_loop_update(self):
+        if self.credit_sharing == "equal_split":
+            # Path B Q8: pool and split this step's buffered accrual among
+            # linked co-located agents BEFORE the dyadic scores are computed
+            self._redistribute_equal_split()
         self.updateIdealMerit()
         self.__generate_new_agents()
+        if self.dyadic_mode != "off":
+            metrics.dyadic_step(self)
         self._generate_new_questions()
 
         self.explored_percentage = np.sum(self.grid.properties["explored"].data) / (
@@ -383,6 +509,10 @@ class MyModel(mesa.Model):
 
         for agent in self._scientists:
             agent.current_local_merit = agent.local_merit(agent.pos)
+
+        # Path B Q6: co-harvest teams and the four dyadic statistics;
+        # computed in every mode (the structural baseline needs no links)
+        metrics.compute_teams(self)
 
         self.datacollector.collect(self)
         self._update_step_goals()

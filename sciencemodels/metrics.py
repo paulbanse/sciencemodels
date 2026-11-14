@@ -107,6 +107,204 @@ def update_ideal_merit(model):
     model.grid.properties["previous_knowledge"].data = model.grid.properties["knowledge"].data.copy()
 
 
+# ---------------------------------------------------------------------------
+# Path B: the dyadic collaborator-choice layer (design menu
+# docs/path_b_dyadic_sketch_v1.md; owner rulings Q1-Q8 in the Path B brief).
+# compute_dyadic_scores and compute_teams are measures; dyadic_step mutates
+# model.links (the declared choice layer) and is driven from
+# MyModel.end_loop_update. Everything here is guarded: with
+# dyadic_mode="off" no rng is consumed and no dynamic state changes.
+
+
+def _normalize_minmax(values):
+    """Scale to [0, 1]; a degenerate range maps to the neutral 0.5."""
+    v = np.asarray(values, dtype=np.float64)
+    lo, hi = float(v.min()), float(v.max())
+    if hi <= lo:
+        return np.full(v.shape, 0.5)
+    return (v - lo) / (hi - lo)
+
+
+def dyadic_visibility_stock(model):
+    """Raw visibility stock per agent for the dyadic score (Q4 ruling:
+    prestige_visibility by default; 'entry' routes via entry_prestige_stock)."""
+    attr = (
+        model.entry_prestige_stock
+        if model.dyadic_visibility_stock == "entry"
+        else model.dyadic_visibility_stock
+    )
+    return np.array([getattr(a, attr) for a in model.agents], dtype=np.float64)
+
+
+def compute_dyadic_scores(model):
+    """U_ij = (1-lam)*V~_j + lam*sqrt(C~_ij * M~_j).
+
+    V~ (visibility stock) and M~ (current_local_merit, Q3) are min-max
+    normalised over the current population; C~ is 1 - d_torus(i,j)/size
+    (grid mode) or the cosine overlap of the agents' flow-weighted harvest
+    profiles (profile_overlap mode, Q2). Returns (U, ids) with U[i, j] the
+    utility of candidate j for proposer i; the diagonal is 0.
+    """
+    agents = list(model.agents)
+    n = len(agents)
+    ids = [a.unique_id for a in agents]
+    U = np.zeros((n, n), dtype=np.float64)
+    if n < 2:
+        return U, ids
+    vis = _normalize_minmax(dyadic_visibility_stock(model))
+    merit = _normalize_minmax([a.current_local_merit for a in agents])
+    lam = float(model.dyadic_lambda)
+    if model.closeness_mode == "profile_overlap":
+        prof = np.stack(
+            [np.asarray(a.harvest_profile, dtype=np.float64) for a in agents]
+        )
+        norms = np.linalg.norm(prof, axis=1)
+        C = np.zeros((n, n), dtype=np.float64)
+        nz = norms > 0.0
+        if nz.any():
+            C[np.ix_(nz, nz)] = (prof[nz] @ prof[nz].T) / np.outer(
+                norms[nz], norms[nz]
+            )
+    else:  # grid: Manhattan torus distance, vectorised (identical arithmetic
+        # to Scientist.compute_distance: abs, min against the wrap, sum)
+        P = np.array([a.pos for a in agents], dtype=np.float64)
+        d = np.abs(P[:, None, :] - P[None, :, :])
+        d = np.minimum(d, model.size - d)
+        C = 1.0 - d.sum(axis=2) / model.size
+    np.fill_diagonal(C, 0.0)
+    goal = np.sqrt(np.maximum(C * merit[None, :], 0.0))
+    U = (1.0 - lam) * vis[None, :] + lam * goal
+    np.fill_diagonal(U, 0.0)
+    return U, ids
+
+
+def _dyadic_bars(model, U, ids, index):
+    """bar(k) = the score of k's best current link if linked, else the mean
+    candidate score (the knob-free relative solo bar)."""
+    n = len(ids)
+    best = np.full(n, -np.inf)
+    has_link = np.zeros(n, dtype=bool)
+    for pair in model.links:
+        a_uid, b_uid = tuple(pair)
+        if a_uid in index and b_uid in index:
+            ia, ib = index[a_uid], index[b_uid]
+            if U[ia, ib] > best[ia]:
+                best[ia] = U[ia, ib]
+            if U[ib, ia] > best[ib]:
+                best[ib] = U[ib, ia]
+            has_link[ia] = True
+            has_link[ib] = True
+    mean_cand = U.sum(axis=1) / max(n - 1, 1)
+    return np.where(has_link, best, mean_cand)
+
+
+def dyadic_step(model):
+    """One dyadic round (pseudocode: docs/path_b_dyadic_sketch_v1.md).
+
+    Proposers (per the regime) score all candidates, form or upgrade links
+    under bilateral relative-bar clearance, then strictly weaker ties
+    dissolve. Mutates model.links only; consumes model.rng (proposal order,
+    logit sampling). Both formulations share this link update.
+    """
+    agents = list(model.agents)
+    if len(agents) < 2:
+        return
+    U, ids = compute_dyadic_scores(model)
+    index = {uid: i for i, uid in enumerate(ids)}
+    n = len(ids)
+
+    # --- formation: proposal + bilateral bar clearance
+    if model.dyadic_proposal_regime == "newcomer":
+        proposers = [a for a in agents if getattr(a, "is_newcomer", False)]
+    else:  # universal
+        proposers = list(agents)
+    order = list(proposers)
+    model.rng.shuffle(order)
+    for prop in order:
+        i = index[prop.unique_id]
+        bars = _dyadic_bars(model, U, ids, index)  # sees links formed so far
+        if model.dyadic_mode == "logit":
+            scores = U[i, :].copy()
+            scores[i] = -np.inf  # never propose to oneself
+            scores = scores - scores.max()
+            w = np.exp(scores / model.epsilon)
+            w = w / w.sum()
+            j = int(model.rng.choice(n, p=w))
+        else:  # threshold: argmax, ties break on candidate order
+            j = int(np.argmax(U[i, :]))
+        if j == i:
+            continue
+        if U[i, j] >= bars[i] and U[j, i] >= bars[j]:
+            model.links.add(frozenset((ids[i], ids[j])))
+
+    # --- dissolution: strict on either side; ties persist
+    bars = _dyadic_bars(model, U, ids, index)
+    for pair in list(model.links):
+        a_uid, b_uid = tuple(pair)
+        ia, ib = index[a_uid], index[b_uid]
+        if U[ia, ib] < bars[ia] or U[ib, ia] < bars[ib]:
+            model.links.discard(pair)
+
+
+def compute_teams(model):
+    """Co-harvest (production) teams: agents sharing a tile at the end of
+    the step. Records model.teams (tuples of unique_ids, size >= 2) and the
+    four dyadic statistics the datacollector reporters read. Consumes no
+    rng and runs in every dyadic_mode, so the off-mode structural baseline
+    (co-location without any choice layer) is measured too."""
+    by_pos = {}
+    for a in model.agents:
+        by_pos.setdefault(a.pos, []).append(a.unique_id)
+    model.teams = [
+        tuple(sorted(members)) for members in by_pos.values() if len(members) >= 2
+    ]
+    active = set()
+    for members in model.teams:
+        for x_i in range(len(members)):
+            for y_i in range(x_i + 1, len(members)):
+                active.add(frozenset((members[x_i], members[y_i])))
+    repeated = len(active & model._ever_active_pairs)
+    model._ever_active_pairs |= active
+    n_active = len(active)
+    share = (repeated / n_active) if n_active else 0.0
+    mean_team = float(np.mean([len(t) for t in model.teams])) if model.teams else 0.0
+    # prestige assortativity over active co-harvest pairs (Pearson, guarded
+    # like correlation_reporter: degenerate variance reads as 0)
+    by_id = {a.unique_id: a for a in model.agents}
+    xs, ys = [], []
+    for pair in active:
+        p, q = tuple(pair)
+        xs.append(by_id[p].prestige)
+        ys.append(by_id[q].prestige)
+    if len(xs) >= 2 and np.std(xs) > 0 and np.std(ys) > 0:
+        assort = float(np.corrcoef(xs, ys)[0, 1])
+    else:
+        assort = 0.0
+    # choice-layer link statistics (the dyadic decision itself): repetition
+    # of declared ties and prestige assortativity over the link set
+    n_links = len(model.links)
+    link_repeated = len(model.links & model._ever_active_links)
+    model._ever_active_links |= model.links
+    link_rep_share = (link_repeated / n_links) if n_links else 0.0
+    lx, ly = [], []
+    for pair in model.links:
+        p, q = tuple(pair)
+        lx.append(by_id[p].prestige)
+        ly.append(by_id[q].prestige)
+    if len(lx) >= 2 and np.std(lx) > 0 and np.std(ly) > 0:
+        link_assort = float(np.corrcoef(lx, ly)[0, 1])
+    else:
+        link_assort = 0.0
+    model._dyadic_stats = {
+        "mean_team_size": np.float64(mean_team),
+        "repeated_collab_share": np.float64(share),
+        "dyadic_assortativity_prestige": np.float64(assort),
+        "n_active_links": n_links,
+        "link_repeated_share": np.float64(link_rep_share),
+        "link_assortativity_prestige": np.float64(link_assort),
+    }
+
+
 def correlation_reporter(merit_type, prestige_type):
     def reporter(m):
         Prest = [getattr(a, prestige_type) for a in m.agents]

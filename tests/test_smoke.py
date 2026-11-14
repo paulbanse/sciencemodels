@@ -19,6 +19,9 @@ Canary run (3 agents, seeded, 30 steps) asserting:
 7. seed identity columns (agent_seed, landscape_seed) in the report;
 8. binding probe flags a mu-ignoring constant generator;
 9. entry_prestige_stock knob: validation and both alternate stocks run.
+10. Path B dyadic layer: off-mode bit-identity with every knob cranked plus
+    the bit-level anchor (mean_prestige), both formulations binding across
+    lambda, and validation of the six new knobs.
 """
 import os
 import sys
@@ -229,6 +232,93 @@ def main():
         stock_report = stock_model.run_mode_for_bulk()
         assert stock_report["entry_prestige_stock"] == stock
     print("entry_prestige_stock OK: validated, both alternate stocks run")
+
+    # 10. Path B dyadic layer: (a) off-mode bit-identity with every knob
+    #     cranked, (b) the bit-level canary anchor, (c) both formulations
+    #     bind across lambda, (d) the six new knobs validate. Note: the
+    #     cranked run also sets credit_sharing="equal_split", whose accrual
+    #     deferral is provably dynamics-neutral at this config (the probe
+    #     run showed bit-identity); with links present the split is the
+    #     intended Q8 mechanics.
+    dyadic_anchor = 0.025399760810316363
+    assert report["mean_prestige"] == dyadic_anchor, report["mean_prestige"]
+    cranked = MyModel(
+        **dict(
+            CANARY_PARAMS,
+            dyadic_mode="off",
+            dyadic_lambda=1.0,
+            dyadic_proposal_regime="universal",
+            credit_sharing="equal_split",
+            closeness_mode="profile_overlap",
+            dyadic_visibility_stock="entry",
+        )
+    )
+    cranked_report = cranked.run_mode_for_bulk()
+    ECHO_KEYS = {
+        "dyadic_mode",
+        "dyadic_lambda",
+        "dyadic_proposal_regime",
+        "credit_sharing",
+        "closeness_mode",
+        "dyadic_visibility_stock",
+    }
+    differing = [
+        k for k in report
+        if k not in ECHO_KEYS and repr(report[k]) != repr(cranked_report[k])
+    ]
+    assert not differing, f"off-mode dynamics moved: {differing}"
+    assert cranked.datacollector.get_model_vars_dataframe().equals(
+        model.datacollector.get_model_vars_dataframe()
+    ), "off-mode model_vars trajectory moved"
+    print(
+        f"Path B off-mode bit-identity OK (anchor mean_prestige="
+        f"{report['mean_prestige']!r}); {len(differing)} dynamics keys differ"
+    )
+
+    BIND_PARAMS = dict(
+        CANARY_PARAMS,
+        n_agents=8,
+        grid_size=10,
+        step_limit=40,
+        agent_generation_time=0.1,
+        agent_seed=5,
+        vanishing_factor_for_prestige=0.9,
+        generation_params={"seed": 9, "std": 5, "number_gaussians": 2},
+    )
+    for dyadic_mode in ("logit", "threshold"):
+        outs = {}
+        for lam in (0.0, 1.0):
+            bm = MyModel(
+                **dict(BIND_PARAMS, dyadic_mode=dyadic_mode, dyadic_lambda=lam)
+            )
+            br = bm.run_mode_for_bulk()
+            bdc = bm.datacollector.get_model_vars_dataframe()
+            outs[lam] = (br["n_active_links"], float(bdc["n_active_links"].mean()))
+        assert outs[0.0] != outs[1.0], (
+            f"{dyadic_mode} does not bind across lambda: {outs}"
+        )
+        assert outs[1.0][1] > 0 or outs[0.0][1] > 0, (
+            f"{dyadic_mode}: no links formed at either lambda"
+        )
+        print(
+            f"Path B binding OK: {dyadic_mode} lambda0={outs[0.0]} lambda1={outs[1.0]}"
+        )
+
+    for bad in (
+        dict(dyadic_mode="bogus"),
+        dict(dyadic_lambda=1.5),
+        dict(dyadic_proposal_regime="bogus"),
+        dict(credit_sharing="bogus"),
+        dict(closeness_mode="bogus"),
+        dict(dyadic_visibility_stock="bogus"),
+    ):
+        try:
+            MyModel(**dict(CANARY_PARAMS, **bad))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"invalid dyadic knob accepted: {bad}")
+    print("Path B knob validation OK: all six knobs reject invalid values")
 
     print("ALL SMOKE TESTS PASSED")
 

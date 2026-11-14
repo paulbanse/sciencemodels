@@ -12,8 +12,9 @@ ruled out (`decisions/rejected/`, `bugs/deadends/`), what was fixed
 
 | Document | Purpose | Status | Supersedes |
 | --- | --- | --- | --- |
-| (none yet) | The first workplan is pending the docs-placement ruling (`IDEA.md`, Open Questions) | - | - |
+| `way_forward.md` | Exploration paths from the proxy-failure ABM to a paper (relocated from `docs/` 2026-11-14 per owner ruling) | live | - |
+| `HANDOVER-2026-11-14.md` | Self-contained project state, evidence ledger, immediate next steps, and open decisions (`Q1`–`Q11`, `P-0001`) | live | - |
 
 ## Register counters
 
-Next ids: ADR-0003, BUG-0006, DE-0001, IE-0001, UE-0001, P-0002.
+Next ids: ADR-0003, BUG-0006, CONT4, DE-0001, IE-0001, UE-0001, P-0007.

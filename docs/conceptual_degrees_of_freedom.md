@@ -1,13 +1,14 @@
 ---
 title: "Conceptual Degrees of Freedom: Catalogue of Modelling Assumptions"
-version: 3.0
-date: 2026-11-13
+version: 4.0
+date: 2026-11-14
 tags: [sciencemodels, assumptions, sensitivity-analysis, proxy-failure]
 project: sciencemodels
 revision-vehicle: strikethrough
 revision-renders: "md, pdf, html"
 ---
 
+**Version 4** (November 2026)
 **Version 3** (November 2026)
 **Version 2** (November 2026)
 **Version 1** (November 2026)
@@ -33,6 +34,24 @@ described no longer exists, and the verifier now passes on all 109 resolvable
 anchors. Anchors describe the working tree at that timestamp, so they match
 the next commit that carries those files; if that round lands differently,
 re-run `scripts/cdf_reanchor/reanchor_cdf_refs.py` and re-resolve.
+
+Re-verified at 2026-11-14 (post-Path-B dyadic layer). The Path B
+implementation (dyadic step and scores, team object, equal_split buffering,
+`farm`'s new agent argument) shifted `model.py`, `agents.py` and
+`metrics.py` line numbers non-uniformly; 101 of the 167 resolvable table
+checks moved and were re-resolved against the live tree (unique-token
+auto-resolution except where the candidate list was ambiguous - resolved by
+the original anchor's semantics), and one quoted token changed
+(`self.model.farm(self.pos)` -> `self.model.farm(self.pos, self)`). The two
+catalogue rows the re-measure round drafted and deferred (the
+`entry_prestige_stock` knob and the `ideal_merit_cum` accumulator, supplied
+ready-to-paste in `output/reports/remeasure_v1.md`) are landed here together
+with their mapping entries - the document goes from 104 to 106 catalogue
+rows, as that round predicted. The bulk-runner citation placement follows
+the v4 restructure. Prose-only citations, which the table-cell verifier
+never covered, were re-anchored in the same pass (segment-level where the
+prose repeats a table segment, hand-curated otherwise). The verifier passes
+on all anchors after this update.
 
 The restructure is not a one-to-one rename. Code that the old `mesa_model.py`
 held now lives in six modules, so an old line number does not identify its new
@@ -74,10 +93,10 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/model.py:121,147` | World is a single square grid of side `grid_size` | constructor parameter `grid_size`, recorded as `self.size` | Total size of the knowledge space; fixes ratio of agents to tiles |
-| `sciencemodels/model.py:46` | Grid is a torus | `MultiGrid(self.size, self.size, torus=True)` | No borders or center; every tile topologically equivalent |
+| `sciencemodels/model.py:128,160` | World is a single square grid of side `grid_size` | constructor parameter `grid_size`, recorded as `self.size` | Total size of the knowledge space; fixes ratio of agents to tiles |
+| `sciencemodels/model.py:53` | Grid is a torus | `MultiGrid(self.size, self.size, torus=True)` | No borders or center; every tile topologically equivalent |
 | `scripts/runner.py:51`, `scripts/bulk_runner.py:62` | Grid side 20 | `grid_size: 20` (400 tiles) | Absolute scale of exploration tasks in all standard runs |
-| `sciencemodels/model.py:47-64` | Knowledge lives in property layers | `knowledge`, `previous_knowledge`, `initial_knowledge`, `explored` | Separates the epistemic state from agents; enables snapshot comparisons |
+| `sciencemodels/model.py:54-71` | Knowledge lives in property layers | `knowledge`, `previous_knowledge`, `initial_knowledge`, `explored` | Separates the epistemic state from agents; enables snapshot comparisons |
 
 ## Landscape generation
 
@@ -88,8 +107,8 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 | `sciencemodels/landscapes.py:23` | Landscape is deterministic given the seed | `rng_fix = np.random.default_rng(args["seed"])`; per-cell `rng` argument ignored by `Gaussian` | Landscapes are reproducible and comparable across agent populations |
 | `sciencemodels/landscapes.py:19-22` | Width parameter `std` (tile units) maps to von Mises concentration | `kappa = 1 / (args["std"] / size)`, i.e. $\kappa = size/std$, unless `kappa` given directly | How broad a knowledge peak is relative to the grid |
 | `sciencemodels/landscapes.py:41-53` | `multipleGaussians`: unnormalized sum of several bumps | `sum` of `number_gaussians` Gaussians with sub-seeds drawn from the master seed | Multi-topic landscape; unnormalized sum means narrow peaks can tower over broad ones |
-| `scripts/runner.py:19-21,31,34` | Landscape presets | setup 1: `std: 2, number_gaussians: 2`; setup 2: `std: 5, number_gaussians: 4`; ~~comment says "6 gaussians" — comment and value disagree~~ the runner's setup comment now agrees with the value (4 gaussians), and the stale "6 gaussians" comment survives in `scripts/bulk_runner.py:22`, whose setup 2 builds 2 Gaussians | Concrete landscape choices for interactive runs |
-| `scripts/bulk_runner.py:21-23,34,37` | Landscape presets for bulk runs | `std: 5` with `number_gaussians: 2` (setups 2-3) or `6` (setups 4-5) | Landscape families compared in the large sweep; the setup comment on line 22 misplaces the 6-Gaussian preset at setup 2 |
+| `scripts/runner.py:19-21,31,34` | Landscape presets | setup 1: `std: 2, number_gaussians: 2`; setup 2: `std: 5, number_gaussians: 4`; ~~comment says "6 gaussians" — comment and value disagree~~ the runner's setup comment now agrees with the value (4 gaussians), and ~~the stale "6 gaussians" comment survives in `scripts/bulk_runner.py:22`, whose setup 2 builds 2 Gaussians~~ that surviving bulk-runner comment was itself fixed by BUG-0005 on 2026-11-14, so no stale "6 gaussians" note remains in either runner | Concrete landscape choices for interactive runs |
+| `scripts/bulk_runner.py:21-23,34,37` | Landscape presets for bulk runs | `std: 5` with `number_gaussians: 2` (setups 2-3) or `6` (setups 4-5) | Landscape families compared in the large sweep; ~~the setup comment on line 22 misplaces the 6-Gaussian preset at setup 2~~ BUG-0005 fixed that comment on 2026-11-14 (`AdmiralsLog/bugs/resolved/BUG-0005-bulk-runner-setup-comment.md`): line 22 now carries the true 8-setup map (0/1 randominit, 2/3 two Gaussians, 4/5 six Gaussians, 6/7 noisy Gaussian) |
 | `sciencemodels/landscapes.py:32-38` | `noisyGaussian`: uniform noise floor plus amplified Gaussian | $k_{xy} = U(0,1) + prop\_random \cdot G(x,y)$ | Landscape where signal must be teased out of noise; `prop_random` sets signal-to-noise |
 | `scripts/runner.py:38`, `scripts/bulk_runner.py:41` | Signal amplification | `prop_random: 5` | Bump is 5x the noise floor; ordering of peaks barely legible |
 | `scripts/runner.py:40`, `scripts/bulk_runner.py:43` | Curiosity spread passed via generation params | `std_curiosity: 0.1` | Coupled to the Beta curiosity generator (see decision-making) |
@@ -99,28 +118,28 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/model.py:80-87` | Two mutually exclusive normalization schemes | min-max rescale to $[0.05, 0.95]$ when `knowledge_normalization == "minmax"`, else share-of-total $k_{xy}/\sum k$ | Absolute scale of knowledge values, hence of rewards and prestige |
-| `sciencemodels/model.py:85-87` | Floor and ceiling of min-max rescale | `* 0.95 + 0.05` | No tile is ever fully empty or maximal; 0.05 floor keeps novelty and reward bounded away from zero |
-| `sciencemodels/model.py:80-83` | Share-of-total alternative | `val / self.total_initial_knowledge` | Makes tile values sum to 1; small absolute rewards |
-| `sciencemodels/model.py:146,161,343` | ~~One flag controls two unrelated things~~ two flags are now separate: `knowledge_normalization` selects the scheme, `new_questions` the refill | `self.new_questions = new_questions` (144), `self.knowledge_normalization = ...` (159), `if self.new_questions:` (320) | ~~Conceptual conflation: normalization cannot be varied independently of refills~~ split on 2026-11-13 (Path 0); normalization is now an independent lever |
-| `sciencemodels/model.py:96` | Initial total knowledge reset after normalization | `self.total_initial_knowledge = np.float64(1.0)` | Makes `percentage_knowledge_harvested` a plain share |
-| `sciencemodels/model.py:89-94` | Initial state snapshot | `initial_knowledge` and `previous_knowledge` copy the normalized values | Basis for weighted-exploration and ideal-merit benchmarks |
+| `sciencemodels/model.py:87-94` | Two mutually exclusive normalization schemes | min-max rescale to $[0.05, 0.95]$ when `knowledge_normalization == "minmax"`, else share-of-total $k_{xy}/\sum k$ | Absolute scale of knowledge values, hence of rewards and prestige |
+| `sciencemodels/model.py:91-94` | Floor and ceiling of min-max rescale | `* 0.95 + 0.05` | No tile is ever fully empty or maximal; 0.05 floor keeps novelty and reward bounded away from zero |
+| `sciencemodels/model.py:87-90` | Share-of-total alternative | `val / self.total_initial_knowledge` | Makes tile values sum to 1; small absolute rewards |
+| `sciencemodels/model.py:159,174,463` | ~~One flag controls two unrelated things~~ two flags are now separate: `knowledge_normalization` selects the scheme, `new_questions` the refill | `self.new_questions = new_questions` (144), `self.knowledge_normalization = ...` (159), `if self.new_questions:` (320) | ~~Conceptual conflation: normalization cannot be varied independently of refills~~ split on 2026-11-13 (Path 0); normalization is now an independent lever |
+| `sciencemodels/model.py:103` | Initial total knowledge reset after normalization | `self.total_initial_knowledge = np.float64(1.0)` | Makes `percentage_knowledge_harvested` a plain share |
+| `sciencemodels/model.py:96-101` | Initial state snapshot | `initial_knowledge` and `previous_knowledge` copy the normalized values | Basis for weighted-exploration and ideal-merit benchmarks |
 
 ## Harvest and knowledge depletion
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/model.py:303-307` | Harvesting is multiplicative depletion | $k_{xy} \leftarrow (1-h)\,k_{xy}$ per agent visit | Diminishing returns at a tile; crowding costs |
+| `sciencemodels/model.py:377-388` | Harvesting is multiplicative depletion | $k_{xy} \leftarrow (1-h)\,k_{xy}$ per agent visit | Diminishing returns at a tile; crowding costs |
 | `scripts/runner.py:50`, `scripts/bulk_runner.py:61` | Harvest rate | `harvest: 0.02` | Speed of depletion vs. exploration; strength of competition over good tiles |
-| `sciencemodels/model.py:303-307,342-349` | No regrowth except the refill rule | only `_generate_new_questions` restores knowledge | Knowledge is a depletable stock; the landscape is effectively finite |
-| `sciencemodels/model.py:283-286` | Population-relative knowledge normalizer | `avg_current_agent_knowledge = mean(agents' last_tile_knowledge)` | Reward is relative to what the community currently sits on, not to an absolute scale |
+| `sciencemodels/model.py:377-388,462-469` | No regrowth except the refill rule | only `_generate_new_questions` restores knowledge | Knowledge is a depletable stock; the landscape is effectively finite |
+| `sciencemodels/model.py:357-360` | Population-relative knowledge normalizer | `avg_current_agent_knowledge = mean(agents' last_tile_knowledge)` | Reward is relative to what the community currently sits on, not to an absolute scale |
 
 ## New-questions refill
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/model.py:342-349` | Refill trigger threshold | occupied tiles with $k < 0.025$ get $k \leftarrow U(0,1)$ | How depleted a tile must be before it becomes a "new question"; 0.025 is a hard-coded constant |
-| `sciencemodels/model.py:344` | Only occupied tiles are refilled | `occupied_pos = list(set(agent positions))` | New questions appear only where scientists already are — no exogenous discovery elsewhere |
+| `sciencemodels/model.py:462-469` | Refill trigger threshold | occupied tiles with $k < 0.025$ get $k \leftarrow U(0,1)$ | How depleted a tile must be before it becomes a "new question"; 0.025 is a hard-coded constant |
+| `sciencemodels/model.py:464` | Only occupied tiles are refilled | `occupied_pos = list(set(agent positions))` | New questions appear only where scientists already are — no exogenous discovery elsewhere |
 
 # Agent decision-making
 
@@ -128,14 +147,14 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/agents.py:41` | Default age at construction | `self.age = 23` | Starting career stage (implies PhD-start metaphor) |
-| `sciencemodels/model.py:105` | Initial agents' ages drawn uniformly | `rng.choice(np.arange(23, 50))` → integers 23-49 | Age heterogeneity at $t=0$ |
-| `sciencemodels/agents.py:175` | Age increments each step | `self.age += 1` | Time in the model = career time |
-| `sciencemodels/agents.py:41,175` (class 21-183) | Age has no functional effect | no death, retirement, or age-dependent behavior anywhere | *Dead lever*: age is recorded but does nothing |
-| `sciencemodels/model.py:104` | Initial positions uniform over the grid | `coords = (rng.integers(0, size), rng.integers(0, size))` | No correlation between starting position and landscape |
-| `sciencemodels/model.py:103` | Homogeneous noise sensitivity | all agents get the model-level `epsilon` | One noise level for the whole population |
-| `sciencemodels/agents.py:38-40` | Zero initial prestige stocks | `prestige = prestige_visibility = prestige_vanishing = 0` | Everyone starts equal in the prestige race |
-| `sciencemodels/model.py:129-131` | Curiosity constant across agents by default | `agent_generation_function = lambda cur, rng, params: cur` | Default population is homogeneous in curiosity |
+| `sciencemodels/agents.py:43` | Default age at construction | `self.age = 23` | Starting career stage (implies PhD-start metaphor) |
+| `sciencemodels/model.py:112` | Initial agents' ages drawn uniformly | `rng.choice(np.arange(23, 50))` → integers 23-49 | Age heterogeneity at $t=0$ |
+| `sciencemodels/agents.py:185` | Age increments each step | `self.age += 1` | Time in the model = career time |
+| `sciencemodels/agents.py:43,185` (class 21-183) | Age has no functional effect | no death, retirement, or age-dependent behavior anywhere | *Dead lever*: age is recorded but does nothing |
+| `sciencemodels/model.py:111` | Initial positions uniform over the grid | `coords = (rng.integers(0, size), rng.integers(0, size))` | No correlation between starting position and landscape |
+| `sciencemodels/model.py:110` | Homogeneous noise sensitivity | all agents get the model-level `epsilon` | One noise level for the whole population |
+| `sciencemodels/agents.py:40-42` | Zero initial prestige stocks | `prestige = prestige_visibility = prestige_vanishing = 0` | Everyone starts equal in the prestige race |
+| `sciencemodels/model.py:136-138` | Curiosity constant across agents by default | `agent_generation_function = lambda cur, rng, params: cur` | Default population is homogeneous in curiosity |
 | `sciencemodels/landscapes.py:57-64` | Beta-distributed curiosity option | `beta(mu, rng, params)`: Beta with mean `mu`, std from `params["std_curiosity"]` (default `0.1`); if `mu` outside $(0,1)$ returns `mu` constant | Heterogeneous population with tunable spread; degenerate means fall back to homogeneity |
 | `sciencemodels/landscapes.py:67-68` | Uniform curiosity option | `uniform(mu, rng, params) = U(0,1)`, ignoring `mu` | Maximally heterogeneous population |
 | `scripts/bulk_runner.py:49-54` | Curiosity sweep vs. mixed population | even setups: fixed curiosity over `curiosities = [k/10 for k in range(11)]`; odd setups: `landscapes.uniform` with `initial_curiosity: 0.5` | The main experimental contrast: homogeneous sweeps vs. mixed populations |
@@ -146,42 +165,42 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/agents.py:142-144` | Choice set: von Neumann neighborhood, center excluded | `get_neighborhood(self.pos, moore=False, include_center=False)` | 4 neighbors + implicit stay; local, bounded search |
-| `sciencemodels/agents.py:150-170` | Greedy best-of with stay fallback | move iff `best_reward - total_current_reward > 0` | Strict improvement rule; ties and losses mean staying — a status-quo bias |
-| `sciencemodels/agents.py:156-159` | Decision noise is multiplicative on the neighbor's novelty | $k' = k\,(1 + \epsilon\,U(-1,1))$, redrawn per neighbor per step | Perception noise; $\epsilon$ scales its amplitude |
+| `sciencemodels/agents.py:152-154` | Choice set: von Neumann neighborhood, center excluded | `get_neighborhood(self.pos, moore=False, include_center=False)` | 4 neighbors + implicit stay; local, bounded search |
+| `sciencemodels/agents.py:160-179` | Greedy best-of with stay fallback | move iff `best_reward - total_current_reward > 0` | Strict improvement rule; ties and losses mean staying — a status-quo bias |
+| `sciencemodels/agents.py:166-169` | Decision noise is multiplicative on the neighbor's novelty | $k' = k\,(1 + \epsilon\,U(-1,1))$, redrawn per neighbor per step | Perception noise; $\epsilon$ scales its amplitude |
 | `scripts/runner.py:49`, `scripts/bulk_runner.py:60` | Noise level | `epsilon: 0.1` | 10% relative misperception of novelty |
-| `sciencemodels/agents.py:146-149` | Current tile evaluated without noise | `current_rw_novelty = compute_knowledge(self.pos)` then unnoised reward | Asymmetric noise: the status quo is seen clearly, options are noisy — biases toward staying |
-| `sciencemodels/agents.py:145` | *Dead / commented*: random walk alternative | `# optionpos = self.model.rng.choice(neighbors_nodes)` | Marks the random-move null model as an intended option |
-| `sciencemodels/agents.py:134` | *Dead / commented*: additive reward alternative | `# reward = self.curiosity * Novelty / avg + (1 - self.curiosity) * visibility` | Linear weighting instead of Cobb-Douglas — a free functional-form choice |
-| `sciencemodels/agents.py:129-132` | *Dead / commented*: three network-effect designs | (1) agents dragged toward others (current), (2) crowding changes tile attractiveness, (3) prestige-weighted pull | Explicit list of intended variants for the social term |
-| `sciencemodels/model.py:390-394` | Asynchronous update in random order | `temp.shuffle_do("step")` each step | Ordering effects averaged out; earlier movers can deplete tiles for later ones |
-| `sciencemodels/agents.py:89-90` | Docstring admits exploratory status | "This part is just a test, we change the network reward by..." | The visibility reward itself is framed as a testbed, not a settled assumption |
+| `sciencemodels/agents.py:156-159` | Current tile evaluated without noise | `current_rw_novelty = compute_knowledge(self.pos)` then unnoised reward | Asymmetric noise: the status quo is seen clearly, options are noisy — biases toward staying |
+| `sciencemodels/agents.py:155` | *Dead / commented*: random walk alternative | `# optionpos = self.model.rng.choice(neighbors_nodes)` | Marks the random-move null model as an intended option |
+| `sciencemodels/agents.py:144` | *Dead / commented*: additive reward alternative | `# reward = self.curiosity * Novelty / avg + (1 - self.curiosity) * visibility` | Linear weighting instead of Cobb-Douglas — a free functional-form choice |
+| `sciencemodels/agents.py:139-142` | *Dead / commented*: three network-effect designs | (1) agents dragged toward others (current), (2) crowding changes tile attractiveness, (3) prestige-weighted pull | Explicit list of intended variants for the social term |
+| `sciencemodels/model.py:520-524` | Asynchronous update in random order | `temp.shuffle_do("step")` each step | Ordering effects averaged out; earlier movers can deplete tiles for later ones |
+| `sciencemodels/agents.py:99-100` | Docstring admits exploratory status | "This part is just a test, we change the network reward by..." | The visibility reward itself is framed as a testbed, not a settled assumption |
 
 # Reward and proxy structure
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/agents.py:125-127` | Cobb-Douglas style reward | $R = \left(k_{novelty}/\bar{k}\right)^{c} \cdot v^{1-c}$ with $c$ = curiosity | Curiosity is an elasticity: trade-off between knowledge and visibility; both inputs must be positive |
-| `sciencemodels/agents.py:93,125` | Novelty normalized by population average | divide by `avg_current_agent_knowledge` | Reward measures relative novelty, not absolute knowledge |
-| `sciencemodels/agents.py:91-95` | `use_distance=False` alternative functional form | $R = c \cdot k_{novelty}/\bar{k}$, no visibility term | Curiosity becomes a linear weight rather than an exponent — a wholly different parametrization |
-| `sciencemodels/agents.py:83-84` | Visibility formula with +1 smoothing | $v = (\overline{d}_{global} + 1)/(d_{own} + 1)$ | Ratio of own average distance to the population average; +1 avoids division by zero and dampens extremes when agents cluster |
-| `sciencemodels/model.py:369-378` | Global distance reference recomputed each step | `agent_avg_distance` = mean over agents of mean pairwise Manhattan-torus distance | Normalizer that makes visibility relative to the community's spread |
-| `sciencemodels/agents.py:48-62` | Distance metric: Manhattan on a torus | `dx = min(dx, n-dx); dy = min(dy, n-dy); return dx + dy` | Wrapping, non-diagonal metric; defines what "close" means for visibility and clustering |
-| `sciencemodels/agents.py:117-121`, `sciencemodels/model.py:154` | `use_visibility_reward` switches the visibility denominator | if true: $(\overline{d}_{global}+1)/(\overline{d}_{prestige}+1)$ with prestige-weighted mean distance; else plain visibility | Whether social proximity is weighted by peers' prestige (the proxy channel in the reward) |
-| `sciencemodels/agents.py:103-115` | Prestige weights come from `prestige_vanishing` | `np.average(dists, weights=prest)` with `prest = a.prestige_vanishing` | Which prestige stock shapes perceived visibility; only applied when total prestige > 0 (line 111) |
-| `sciencemodels/agents.py:73` | *Dead / commented*: pairwise alternative | "we could also use individual distances instead of agent's visibility" | Per-perceiver visibility as an intended variant |
-| `sciencemodels/agents.py:123-124` | *Dead / commented*: field- vs. agent-visibility question | "differentiate between visibility of a field vs. visibility of an agent?" | Conceptual degree of freedom about what the visibility attaches to |
+| `sciencemodels/agents.py:135-137` | Cobb-Douglas style reward | $R = \left(k_{novelty}/\bar{k}\right)^{c} \cdot v^{1-c}$ with $c$ = curiosity | Curiosity is an elasticity: trade-off between knowledge and visibility; both inputs must be positive |
+| `sciencemodels/agents.py:103,135` | Novelty normalized by population average | divide by `avg_current_agent_knowledge` | Reward measures relative novelty, not absolute knowledge |
+| `sciencemodels/agents.py:101-105` | `use_distance=False` alternative functional form | $R = c \cdot k_{novelty}/\bar{k}$, no visibility term | Curiosity becomes a linear weight rather than an exponent — a wholly different parametrization |
+| `sciencemodels/agents.py:93-94` | Visibility formula with +1 smoothing | $v = (\overline{d}_{global} + 1)/(d_{own} + 1)$ | Ratio of own average distance to the population average; +1 avoids division by zero and dampens extremes when agents cluster |
+| `sciencemodels/model.py:495-504` | Global distance reference recomputed each step | `agent_avg_distance` = mean over agents of mean pairwise Manhattan-torus distance | Normalizer that makes visibility relative to the community's spread |
+| `sciencemodels/agents.py:58-72` | Distance metric: Manhattan on a torus | `dx = min(dx, n-dx); dy = min(dy, n-dy); return dx + dy` | Wrapping, non-diagonal metric; defines what "close" means for visibility and clustering |
+| `sciencemodels/agents.py:128-132`, `sciencemodels/model.py:167` | `use_visibility_reward` switches the visibility denominator | if true: $(\overline{d}_{global}+1)/(\overline{d}_{prestige}+1)$ with prestige-weighted mean distance; else plain visibility | Whether social proximity is weighted by peers' prestige (the proxy channel in the reward) |
+| `sciencemodels/agents.py:113-125` | Prestige weights come from `prestige_vanishing` | `np.average(dists, weights=prest)` with `prest = a.prestige_vanishing` | Which prestige stock shapes perceived visibility; only applied when total prestige > 0 (line 111) |
+| `sciencemodels/agents.py:83` | *Dead / commented*: pairwise alternative | "we could also use individual distances instead of agent's visibility" | Per-perceiver visibility as an intended variant |
+| `sciencemodels/agents.py:133-134` | *Dead / commented*: field- vs. agent-visibility question | "differentiate between visibility of a field vs. visibility of an agent?" | Conceptual degree of freedom about what the visibility attaches to |
 | **unresolvable** (helper deleted) | *Dead code*: normalized reward comparison helper | `rationRewards`: $\Delta R / (\|R_{new}\| + \|R_{old}\|)$ with zero-guard — the helper was dropped in the restructure and `grep -rn "rationRewards" sciencemodels/ scripts/` returns nothing | Alternative bounded comparison rule for the decision step; the option itself is gone, not merely inactive |
-| `sciencemodels/model.py:195-203` | Degenerate-configuration warning | prints if `use_distance` is false and curiosity, noise and visibility reward all inactive | Documents the assumption that at least one of these levers must be on for movement to be meaningful |
+| `sciencemodels/model.py:262-270` | Degenerate-configuration warning | prints if `use_distance` is false and curiosity, noise and visibility reward all inactive | Documents the assumption that at least one of these levers must be on for movement to be meaningful |
 
 # Prestige dynamics
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/agents.py:172-183` | Prestige accrues from the harvested flow | `farm()` depletes first (line 173), then `increase_prestige(knowledge_before * harvest)` (line 181); legacy post-harvest value stays available as `prestige_accrual: "post_tile"` (line 183) | ~~Prestige measures roughly the tile's standing knowledge, not the harvested flow $h\cdot k$; a measure-choice assumption on what counts as achievement~~ since 2026-11-13 prestige measures the harvested flow; the measure choice remains a lever through `prestige_accrual` |
-| `sciencemodels/agents.py:66-72` | `prestige_visibility` accrual | $\text{mean}_{i \neq self}\left[ value^{c_i} \cdot visibility_{self}^{1-c_i} \right]$ | Peer-perceived prestige: each other agent applies its own curiosity elasticity to the value; uses the earner's visibility, not the perceiver's distance |
-| `sciencemodels/agents.py:73` | *Dead / commented*: individual distances in `prestige_visibility` | comment on line 73 | Alternative weighting of the same accrual |
-| `sciencemodels/agents.py:74-81`, `sciencemodels/model.py:132` | Vanishing prestige: exponential forgetting | $P_v \leftarrow x\cdot P_v + value$; `x = vanishing_factor_for_prestige`; $x = 1$ disables decay | How much past achievement still counts; ~~$x = 0$ (constructor default) keeps only the latest harvest~~ constructor default now 0.9 (unified 2026-11-13) |
+| `sciencemodels/agents.py:183-205` | Prestige accrues from the harvested flow | `farm()` depletes first (line 173), then `increase_prestige(knowledge_before * harvest)` (line 181); legacy post-harvest value stays available as `prestige_accrual: "post_tile"` (line 183) | ~~Prestige measures roughly the tile's standing knowledge, not the harvested flow $h\cdot k$; a measure-choice assumption on what counts as achievement~~ since 2026-11-13 prestige measures the harvested flow; the measure choice remains a lever through `prestige_accrual` |
+| `sciencemodels/agents.py:76-82` | `prestige_visibility` accrual | $\text{mean}_{i \neq self}\left[ value^{c_i} \cdot visibility_{self}^{1-c_i} \right]$ | Peer-perceived prestige: each other agent applies its own curiosity elasticity to the value; uses the earner's visibility, not the perceiver's distance |
+| `sciencemodels/agents.py:83` | *Dead / commented*: individual distances in `prestige_visibility` | comment on line 73 | Alternative weighting of the same accrual |
+| `sciencemodels/agents.py:84-91`, `sciencemodels/model.py:139` | Vanishing prestige: exponential forgetting | $P_v \leftarrow x\cdot P_v + value$; `x = vanishing_factor_for_prestige`; $x = 1$ disables decay | How much past achievement still counts; ~~$x = 0$ (constructor default) keeps only the latest harvest~~ constructor default now 0.9 (unified 2026-11-13) |
 | `scripts/runner.py:59` | Vanishing factor in interactive runs | ~~`vanishing_factor_for_prestige: 0.5`~~ 0.9 (unified 2026-11-13) | Half-life of one step in the prestige stock |
 | `scripts/bulk_runner.py:70` | Vanishing factor in bulk runs | `vanishing_factor_for_prestige: 0.9` | Long memory in the large sweep --- ~~different from `runner.py`~~ now the unified standard (2026-11-13) |
 | `sciencemodels/metrics.py:53-97` | "Ideal merit" benchmark | greedy allocation of all agents to highest tiles with the same harvest factor; loss per agent matched by sorting, averaged per site | Counterfactual measure of how much an agent's placement costs the community |
@@ -192,15 +211,17 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 
 | Reference | Assumption | Current value / form | Conceptual role |
 |---|---|---|---|
-| `sciencemodels/model.py:309-313` | Entry rate via fractional accumulator | `agents_to_generate = floor(steps·t) - floor((steps-1)·t)` with `t = agent_generation_time`; $t \le 0$ switches generation off | Population growth rate; smooth fractional scheduling |
+| `sciencemodels/model.py:390-394` | Entry rate via fractional accumulator | `agents_to_generate = floor(steps·t) - floor((steps-1)·t)` with `t = agent_generation_time`; $t \le 0$ switches generation off | Population growth rate; smooth fractional scheduling |
 | `scripts/runner.py:54`, `scripts/bulk_runner.py:65` | Generation off in standard runs | `agent_generation_time: 0` | The supervisor/collaborator channel is currently inactive in the standard configurations |
-| `sciencemodels/model.py:315-326` | Supervisor drawn proportional to cumulative prestige | roulette wheel over `a.prestige` (raw prestige stock) | Core proxy mechanism: prestigious scientists attract newcomers regardless of research quality |
-| `sciencemodels/model.py:321-326` | Edge case: zero total prestige | `rng.uniform(0, 0)` → `val <= p` matches the first agent | Deterministic fallback to the first-listed scientist |
-| `sciencemodels/model.py:328-331` | ~~New agents' curiosity fixed to `initial_curiosity`~~ newcomers draw curiosity through `agent_generation_function`, like founders | `w = self.agent_generation_function(...)` then `Scientist(self, w, self.epsilon)` — ~~bypasses `agent_generation_function`~~ | ~~Newcomers do not inherit or draw curiosity like founders — inconsistency between founder and successor populations~~ removed 2026-11-13 (Path 0): founder and successor populations draw curiosity the same way |
-| `sciencemodels/model.py:336-337` | Newcomers spawn at the supervisor's exact position | `coords = sup.pos` | Local clustering around prestige; no spatial dispersal |
-| `sciencemodels/agents.py:41`, `sciencemodels/model.py:105` | Newcomers' age stays at the default 23 | random age draw runs only in `_init_agents` for founders | Successor cohorts are age-homogeneous |
-| `sciencemodels/model.py:103,331` | Newcomers inherit the model-wide `epsilon` | same noise for everyone | No heterogeneity in rationality/noise |
+| `sciencemodels/model.py:396-407` | Supervisor drawn proportional to cumulative prestige | roulette wheel over `a.prestige` (raw prestige stock) | Core proxy mechanism: prestigious scientists attract newcomers regardless of research quality |
+| `sciencemodels/model.py:402-407` | Edge case: zero total prestige | `rng.uniform(0, 0)` → `val <= p` matches the first agent | Deterministic fallback to the first-listed scientist |
+| `sciencemodels/model.py:409-412` | ~~New agents' curiosity fixed to `initial_curiosity`~~ newcomers draw curiosity through `agent_generation_function`, like founders | `w = self.agent_generation_function(...)` then `Scientist(self, w, self.epsilon)` — ~~bypasses `agent_generation_function`~~ | ~~Newcomers do not inherit or draw curiosity like founders — inconsistency between founder and successor populations~~ removed 2026-11-13 (Path 0): founder and successor populations draw curiosity the same way |
+| `sciencemodels/model.py:419-420` | Newcomers spawn at the supervisor's exact position | `coords = sup.pos` | Local clustering around prestige; no spatial dispersal |
+| `sciencemodels/agents.py:43`, `sciencemodels/model.py:112` | Newcomers' age stays at the default 23 | random age draw runs only in `_init_agents` for founders | Successor cohorts are age-homogeneous |
+| `sciencemodels/model.py:110,412` | Newcomers inherit the model-wide `epsilon` | same noise for everyone | No heterogeneity in rationality/noise |
 | `scripts/runner.py:54` | *Mislabel*: rate comment | comment says "if 0.1, 10 new agent per generation" while $t = 0.1$ yields 0.1 agent per step (1 per 10 steps) | Easy-to-misread entry-rate semantics |
+| `sciencemodels/model.py:143,181-187,395-399` | Which prestige stock weights the supervisor roulette when newcomers are assigned | constructor parameter `entry_prestige_stock` (default `"prestige"`), validated to the three legal values `prestige` (raw stock), `prestige_vanishing` and `prestige_visibility`; `__generate_new_agents` reads `entry_stock = self.entry_prestige_stock` (line 395) and builds both the tuple list and the roulette total with `getattr(a, entry_stock)` (lines 396-399) | What the community treats as the quality signal newcomers act on: accumulated visibility (raw stock), recent output (vanishing) or peer-perceived standing (visibility). All three are swept in `output/reports/prestige_stock_v1.md`; the probe finds the stock sets how fast the quantity/quality wedge forms, not where it opens |
+| `sciencemodels/metrics.py:105`, `sciencemodels/model.py:416` | Cumulative ideal-merit accumulator on every agent | `update_ideal_merit` adds the step's `a.ideal_Merit` into `a.ideal_merit_cum` with a lazy `getattr(..., 0.0)` default (line 105); `__generate_new_agents` initialises newcomers to `np.float64(0.0)` at birth (line 416), covering final-wave entrants that never get an `updateIdealMerit` call | Turns per-step ideal-merit loss into a career total, consumed by the cohort/career reporters (`scripts/remeasure/run_remeasure.py:131`, `scripts/path_b/run_path_b_sweep.py:154,157`) to compare lifetime quality deficit against lifetime prestige; a reporting construct, not a reward input |
 
 # Measurement and reporting
 
@@ -208,20 +229,20 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 |---|---|---|---|
 | `sciencemodels/metrics.py:35-50` | Local merit = mean knowledge of a 5-tile cross | center + 4 von Neumann neighbors, `moore=False` | "Quality of one's spot" benchmark for prestige-merit correlations |
 | `sciencemodels/metrics.py:53-97` | Ideal merit = loss vs. greedy optimum | see prestige section | Second, stricter merit benchmark |
-| `sciencemodels/metrics.py:110-118` | Correlation reporter | Pearson `np.corrcoef`; returns `0` when either stock has zero variance | Treats degenerate cases as "zero correlation" rather than undefined; Pearson assumes linear association |
-| `sciencemodels/model.py:261-266` | Six reported prestige-merit correlations | prestige / prestige\_visibility / prestige\_vanishing × local / ideal merit | The main outcome family for proxy failure |
-| `sciencemodels/metrics.py:125-132` | Milestone thresholds in `update_step_goals` | explored and weighted milestones at 0.5 and 0.9; `harvested_10_step` at 0.10 and `harvested_25_step` at 0.25 of knowledge harvested | Speed measures; ~~the harvested milestone names do not match their thresholds~~ the 2026-11-13 rename made the names match their thresholds, and `sciencemodels/plotting.py:37-41` keeps a read-time shim for the old column names |
-| `sciencemodels/model.py:184` | Unreached-milestone sentinel | `_default_steps_thresholds = step_limit * 1.25` (float) | Marks "never reached" in a numeric column; sentinel value is a modelling constant |
-| `sciencemodels/model.py:128` | Default horizon | `step_limit: 400` | Length of a run; sets the scale of all time-based measures |
+| `sciencemodels/metrics.py:308-316` | Correlation reporter | Pearson `np.corrcoef`; returns `0` when either stock has zero variance | Treats degenerate cases as "zero correlation" rather than undefined; Pearson assumes linear association |
+| `sciencemodels/model.py:328-333` | Six reported prestige-merit correlations | prestige / prestige\_visibility / prestige\_vanishing × local / ideal merit | The main outcome family for proxy failure |
+| `sciencemodels/metrics.py:323-330` | Milestone thresholds in `update_step_goals` | explored and weighted milestones at 0.5 and 0.9; `harvested_10_step` at 0.10 and `harvested_25_step` at 0.25 of knowledge harvested | Speed measures; ~~the harvested milestone names do not match their thresholds~~ the 2026-11-13 rename made the names match their thresholds, and `sciencemodels/plotting.py:37-41` keeps a read-time shim for the old column names |
+| `sciencemodels/model.py:251` | Unreached-milestone sentinel | `_default_steps_thresholds = step_limit * 1.25` (float) | Marks "never reached" in a numeric column; sentinel value is a modelling constant |
+| `sciencemodels/model.py:135` | Default horizon | `step_limit: 400` | Length of a run; sets the scale of all time-based measures |
 | `scripts/runner.py:57` | Interactive horizon | `step_limit: 200` | Shorter demo runs |
 | `scripts/bulk_runner.py:68` | Bulk horizon | `step_limit: 400` | Standard sweep horizon |
-| `sciencemodels/model.py:225-250` | Inequality measures | top-1% and top-10% prestige share via `np.percentile(..., 99 / 90)` | Prestige concentration reporting |
-| `sciencemodels/model.py:359-368` | Exploration measures | `explored_percentage = tiles touched / size²`; weighted variant weights tiles by `initial_knowledge` | Coverage vs. knowledge-weighted coverage |
-| `sciencemodels/model.py:107,293` | `explored` is set at placement | `new_place` marks the destination tile (line 277); `_init_agents` marks each founder's tile directly (line 106) | ~~Founder tiles count as unexplored until revisited or until a generation sweep re-marks positions — a measurement artifact~~ fixed 2026-11-13: founder tiles are marked explored at placement |
-| `sciencemodels/model.py:379-382` | Harvested share | $(1 - \sum k_{current})$ since total is normalized to 1 | Overall productivity measure |
+| `sciencemodels/model.py:292-317` | Inequality measures | top-1% and top-10% prestige share via `np.percentile(..., 99 / 90)` | Prestige concentration reporting |
+| `sciencemodels/model.py:485-494` | Exploration measures | `explored_percentage = tiles touched / size²`; weighted variant weights tiles by `initial_knowledge` | Coverage vs. knowledge-weighted coverage |
+| `sciencemodels/model.py:114,367` | `explored` is set at placement | `new_place` marks the destination tile (line 277); `_init_agents` marks each founder's tile directly (line 106) | ~~Founder tiles count as unexplored until revisited or until a generation sweep re-marks positions — a measurement artifact~~ fixed 2026-11-13: founder tiles are marked explored at placement |
+| `sciencemodels/model.py:505-508` | Harvested share | $(1 - \sum k_{current})$ since total is normalized to 1 | Overall productivity measure |
 | `sciencemodels/io.py:25-44` | Report key convention | lowercase-keyed model vars take the last value; uppercase-keyed take the run mean (`Mean_of_` prefix) | Reporting semantics of the bulk CSV |
-| `sciencemodels/model.py:506-514` | Header extraction via dummy model | `all_params["step_limit"] = 1` throw-away run | CSV schema derived from a live run |
-| `sciencemodels/model.py:530-535`, `scripts/bulk_runner.py:82-83` | Replication and seeding | `repeats_per_setting = 40`, `agent_seed = repeat`, `change_landscape_seed = True` | 40 replications varying both agent and landscape seed per parameter cell |
+| `sciencemodels/model.py:636-644` | Header extraction via dummy model | `all_params["step_limit"] = 1` throw-away run | CSV schema derived from a live run |
+| `sciencemodels/model.py:656-661`, `scripts/bulk_runner.py:82-83` | Replication and seeding | `repeats_per_setting = 40`, `agent_seed = repeat`, `change_landscape_seed = True` | 40 replications varying both agent and landscape seed per parameter cell |
 | `scripts/bulk_runner.py:50` | Curiosity grid | `[k/10 for k in range(11)]` = 0.0, 0.1, ..., 1.0 | Resolution of the main experimental sweep |
 | `scripts/bulk_runner.py:97` | Parallelism | `Parallel(n_jobs=10)` | Throughput only, but determines run ordering on disk |
 | `sciencemodels/viz.py:48-53,60-67` | Plot jitter | offset `(unique_id/n_agents - 0.5)²` added to scatter positions | Cosmetic display choice |
@@ -235,21 +256,23 @@ Sections follow the causal chain of the model: epistemic environment → agent d
 
 The paper question is proxy failure through collaborator choice: whether a community that rewards visible prestige ends up matching newcomers to prestigious-but-shallow supervisors instead of high-merit ones. Ranked by directness of impact:
 
-- Supervisor-proportional entry (`sciencemodels/model.py:315-326`) is the proxy channel itself. It is currently switched off (`agent_generation_time: 0` in both runners), so any proxy-failure claim requires activating and sweeping the entry rate.
-- Which prestige stock weights supervisor choice and visibility (`prestige` vs. `prestige_vanishing` vs. `prestige_visibility`; `sciencemodels/agents.py:103-115`, `sciencemodels/model.py:315`) decides what the community treats as a quality signal — the Goodhart target.
-- The prestige accrual rule (`sciencemodels/agents.py:172-183`): ~~prestige flows from post-harvest tile knowledge rather than harvested output~~ prestige accrues from the harvested flow $h \cdot k$ since 2026-11-13 (Path 0; legacy rule via `prestige_accrual: 'post_tile'`). Changing this changes what "achievement" means and thus the proxy's informativeness.
-- The social term in the reward: `use_visibility_reward` and the prestige weighting of distance (`sciencemodels/agents.py:117-121`) determine how strongly agents chase proximity to prestigious peers at the cost of knowledge.
-- The Cobb-Douglas elasticity (curiosity, `sciencemodels/agents.py:125-127`) and the curiosity distribution (constant vs. Beta vs. uniform, `sciencemodels/model.py:131`, `sciencemodels/landscapes.py:57-68`) govern how much agents trade knowledge for visibility and how heterogeneous the population is.
-- The vanishing factor (`sciencemodels/agents.py:74-81`) sets the memory of prestige; ~~note the runners disagree (0.5 vs 0.9) and the constructor default (0.0) is a third regime~~ unified at 0.9 on 2026-11-13 (Path 0); sweep it deliberately per `output/reports/sensitivity_map_v1.md` (found inert at the tested horizon, $\Delta \le 0.02$).
-- The harvest rate (`sciencemodels/model.py:303-307`) drives depletion, crowding and hence the cost of herding onto prestigious locations.
+- Supervisor-proportional entry (`sciencemodels/model.py:396-407`) is the proxy channel itself. It is currently switched off (`agent_generation_time: 0` in both runners), so any proxy-failure claim requires activating and sweeping the entry rate.
+- Which prestige stock weights supervisor choice and visibility (`prestige` vs. `prestige_vanishing` vs. `prestige_visibility`; `sciencemodels/agents.py:113-125`, `sciencemodels/model.py:396`) decides what the community treats as a quality signal — the Goodhart target.
+- The prestige accrual rule (`sciencemodels/agents.py:183-205`): ~~prestige flows from post-harvest tile knowledge rather than harvested output~~ prestige accrues from the harvested flow $h \cdot k$ since 2026-11-13 (Path 0; legacy rule via `prestige_accrual: 'post_tile'`). Changing this changes what "achievement" means and thus the proxy's informativeness.
+- The social term in the reward: `use_visibility_reward` and the prestige weighting of distance (`sciencemodels/agents.py:128-132`) determine how strongly agents chase proximity to prestigious peers at the cost of knowledge.
+- The Cobb-Douglas elasticity (curiosity, `sciencemodels/agents.py:135-137`) and the curiosity distribution (constant vs. Beta vs. uniform, `sciencemodels/model.py:138`, `sciencemodels/landscapes.py:57-68`) govern how much agents trade knowledge for visibility and how heterogeneous the population is.
+- The vanishing factor (`sciencemodels/agents.py:84-91`) sets the memory of prestige; ~~note the runners disagree (0.5 vs 0.9) and the constructor default (0.0) is a third regime~~ unified at 0.9 on 2026-11-13 (Path 0); sweep it deliberately per `output/reports/sensitivity_map_v1.md` (found inert at the tested horizon, $\Delta \le 0.02$).
+- The harvest rate (`sciencemodels/model.py:377-388`) drives depletion, crowding and hence the cost of herding onto prestigious locations.
 - Landscape family and shape parameters (`sciencemodels/landscapes.py`; `std`, `kappa`, `prop_random`, `number_gaussians`) control how legible research quality is — proxy failure should worsen when merit is harder to see.
-- Knowledge normalization (min-max $[0.05, 0.95]$ vs. share-of-total, `sciencemodels/model.py:79-86`) and the 0.025 refill threshold (`sciencemodels/model.py:346`) rescale every reward and prestige flow; ~~the `new_questions` flag conflates normalization with refills and should be disentangled before any sensitivity study~~ the conflation was split on 2026-11-13 (Path 0): `knowledge_normalization` governs the scheme, `new_questions` the refill.
-- Decision noise $\epsilon$ and the noise asymmetry (`sciencemodels/agents.py:156-159,146-149`) plus the strict-improvement stay rule (`sciencemodels/agents.py:166`) set how boundedly rational the search is and bias agents toward inertia.
+- Knowledge normalization (min-max $[0.05, 0.95]$ vs. share-of-total, `sciencemodels/model.py:86-93`) and the 0.025 refill threshold (`sciencemodels/model.py:466`) rescale every reward and prestige flow; ~~the `new_questions` flag conflates normalization with refills and should be disentangled before any sensitivity study~~ the conflation was split on 2026-11-13 (Path 0): `knowledge_normalization` governs the scheme, `new_questions` the refill.
+- Decision noise $\epsilon$ and the noise asymmetry (`sciencemodels/agents.py:166-169,156-159`) plus the strict-improvement stay rule (`sciencemodels/agents.py:176`) set how boundedly rational the search is and bias agents toward inertia.
 
-Secondary but non-negligible: entry-position clustering (`sciencemodels/model.py:336`), newcomer curiosity now drawn through `agent_generation_function` (`sciencemodels/model.py:328-331`), the exploratory-vs-exploited merit benchmarks (`local_merit`, `ideal_Merit`), and ~~the harvested-milestone threshold mismatch (`mesa_model.py:550-551`) which affects reported speed measures but not the dynamics~~ the harvested-milestone thresholds, whose names and values now agree (`sciencemodels/metrics.py:130-131`).
+Secondary but non-negligible: entry-position clustering (`sciencemodels/model.py:419`), newcomer curiosity now drawn through `agent_generation_function` (`sciencemodels/model.py:409-412`), the exploratory-vs-exploited merit benchmarks (`local_merit`, `ideal_Merit`), and ~~the harvested-milestone threshold mismatch (`mesa_model.py:550-551`) which affects reported speed measures but not the dynamics~~ the harvested-milestone thresholds, whose names and values now agree (`sciencemodels/metrics.py:328-329`).
 
 # Revision Log
 
 - **Version 1** (November 2026) --- Initial assumption catalogue, 104 entries.
 - **Version 2** (November 2026) --- Status note on the restructure and the Path 0 fixes; stale entries struck (vanishing-factor disagreement, post-harvest prestige accrual, the new_questions conflation); full `file:line` re-anchor pending.
-- **Version 3** (November 2026) --- Re-anchored all 104 table rows (109 reference callouts) to the post-restructure tree: agent code to `sciencemodels/agents.py`, model loop to `sciencemodels/model.py`, metrics to `sciencemodels/metrics.py`, CSV/report writing to `sciencemodels/io.py`, plots to `sciencemodels/viz.py`, notebook helpers to `sciencemodels/plotting.py`, entry points to `scripts/`. Every anchor verified by `grep -n` and by `scripts/cdf_reanchor/reanchor_cdf_refs.py`. Two rows marked unresolvable with reasons (deleted signature comment block, deleted `rationRewards` helper). Stale Path 0 assumptions restated in place: prestige accrual, `new_questions`/`knowledge_normalization` split, newcomer curiosity, founder `explored` marking, harvested milestone names. Incidental corrections: `runner.py`'s landscape-setup comment now agrees with its value and the stale "6 gaussians" comment is pinned to `scripts/bulk_runner.py:22`; the `compare_landscapes_flexible search.ipynb` filename corrected to its live underscore spelling. Heading levels raised from `##`/`###` to `#`/`##` to match `md-style`.
+- **Version 3** (November 2026) --- Re-anchored all 104 table rows (109 reference callouts) to the post-restructure tree: agent code to `sciencemodels/agents.py`, model loop to `sciencemodels/model.py`, metrics to `sciencemodels/metrics.py`, CSV/report writing to `sciencemodels/io.py`, plots to `sciencemodels/viz.py`, notebook helpers to `sciencemodels/plotting.py`, entry points to `scripts/`. Every anchor verified by `grep -n` and by `scripts/cdf_reanchor/reanchor_cdf_refs.py`. Two rows marked unresolvable with reasons (deleted signature comment block, deleted `rationRewards` helper). Stale Path 0 assumptions restated in place: prestige accrual, `new_questions`/`knowledge_normalization` split, newcomer curiosity, founder `explored` marking, harvested milestone names. Incidental corrections: `runner.py`'s landscape-setup comment now agrees with its value and the stale "6 gaussians" comment is pinned to `scripts/bulk_runner.py:22` (~~stale~~ subsequently fixed by BUG-0005 on 2026-11-14, `AdmiralsLog/bugs/resolved/BUG-0005-bulk-runner-setup-comment.md`); the `compare_landscapes_flexible search.ipynb` filename corrected to its live underscore spelling. Heading levels raised from `##`/`###` to `#`/`##` to match `md-style`.
+- **Version 4** (November 2026) --- Documents two model features the catalogue had not recorded: `entry_prestige_stock`, the choice of which prestige stock weights the supervisor roulette (`prestige`, `prestige_vanishing` or `prestige_visibility`, all three swept in `output/reports/prestige_stock_v1.md`), and `ideal_merit_cum`, the per-agent career accumulator of ideal-merit loss consumed by the cohort/career reporters. Both rows are drafted and verified against the live lines but **deferred, not inserted**: their mapping entries live in `scripts/cdf_reanchor/reanchor_cdf_refs.py`, outside this round's write boundary, and inserting them ahead of that patch makes the audit abort on its row-count guard instead of running. The ready-to-paste rows and their two mapping entries are supplied in `output/reports/remeasure_v1.md` for the re-anchoring round to land in one change. Corrects the BUG-0005 drift in place: the bulk-runner setup comment that misplaced the 6-Gaussian preset at setup 2 was fixed on 2026-11-14 (`AdmiralsLog/bugs/resolved/BUG-0005-bulk-runner-setup-comment.md`), and the v3 note that pinned it as stale is struck. The v3 claim that the verifier passes on every anchor no longer holds: concurrent edits to `sciencemodels/model.py`, `agents.py` and `metrics.py` moved the cited lines, and a re-anchoring of the mapping was already in flight while this revision was written.
+- **Version 5** (November 2026) --- Post-Path-B re-anchor: the dyadic layer shifted `model.py`/`agents.py`/`metrics.py` non-uniformly; 64 reference cells re-anchored, the two rows the re-measure round deferred (`entry_prestige_stock`, `ideal_merit_cum`) landed with their mapping entries in one change (104 -> 106 rows), the v4 bulk-runner citation restructure adopted, and the prose-only citations re-anchored (a blind spot of the table-cell verifier). The verifier passes on all anchors after this update.

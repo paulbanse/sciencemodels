@@ -6,7 +6,7 @@ tags: [adr, coordination, multiagent, git, autonomy, records]
 project: "sciencemodels"
 ---
 
-- **Status:** proposed (drafted 2026-11-13 from the onboarding battery ruling; reworked the same day per the owner's correction that the general principles belong as ADRs in `decisions/`, not in a `rules/` folder; reworked again per owner feedback: git discipline formulated generally, field-execution hygiene clauses added, adapted from MA_Klann ADR-0015; acceptance pending a ruling on this text)
+- **Status:** accepted (ruled 2026-11-14; drafted 2026-11-13 from the onboarding battery ruling; reworked the same day per the owner's correction that the general principles belong as ADRs in `decisions/`, not in a `rules/` folder; reworked again per owner feedback: git discipline formulated generally, field-execution hygiene clauses added, adapted from MA_Klann ADR-0015)
 - **Date:** 2026-11-13
 - **Supersedes:** -
 - **Related:** `IDEA.md`, `AGENTS.md`, `AdmiralsLog/README.md`, ADR-0002; source of the field-execution clauses: `niklasklann-project/AdmiralsLog/decisions/accepted/ADR-0015-agent-coordination-and-execution-hygiene.md`
@@ -106,5 +106,4 @@ ADR spawns.
 A session that pushes, forks the records vocabulary, restructures code
 without the workplan item, or edits frozen files violates this ADR; the
 incident is noted in the month log and the change is reported for reversal.
-This draft stays at the `decisions/` top level until the owner rules on its
-text.
+Ruled accepted on 2026-11-14 and moved to `decisions/accepted/`.
