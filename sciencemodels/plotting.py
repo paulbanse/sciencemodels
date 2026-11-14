@@ -11,10 +11,23 @@ still plot, because ``harvested_50_step``/``harvested_90_step`` columns are
 renamed to ``harvested_10_step``/``harvested_25_step`` on read, and
 ``plot_smt`` resolves legacy metric names passed at the call sites against
 either spelling.
+
+The correlation family drifted three times over, so the shim covers it too:
+the current report CSVs carry ``Mean_of_Corr_prestige_local_merit`` (snake
+case, ``Mean_of_`` prefix from the datacollector), the live notebook call
+sites ask for ``Mean_of_Corr_prestige_localMerit`` (camelCase), and the legacy
+CSVs under ``data/`` carry ``corr_prestige_localMerit`` and
+``mean_corr_prestige_localMerit``.  Both directions are handled:
+``_apply_legacy_shim`` rewrites any legacy spelling to the current schema
+name on read, and ``_resolve_column`` maps a requested name onto whichever
+spelling a frame actually carries.  ``CORR_METRIC_ALIASES`` is the alias table
+for the six metrics; :func:`_canonical_corr_name` is the matching rule, so the
+three spellings are interchangeable at every call site.
 """
 from __future__ import annotations
 
 import os
+import re
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,6 +40,63 @@ LEGACY_COLUMN_RENAMES = {
 }
 _REVERSE_COLUMN_RENAMES = {new: old for old, new in LEGACY_COLUMN_RENAMES.items()}
 
+# correlation family: canonical suffix after ``Corr_``; the current schema uses
+# snake case and an explicit ``Mean_of_`` prefix only for aggregated report rows
+CORR_METRIC_SUFFIXES = (
+    "prestige_local_merit",
+    "prestige_ideal_merit",
+    "prestige_visibility_local_merit",
+    "prestige_visibility_ideal_merit",
+    "prestige_vanishing_local_merit",
+    "prestige_vanishing_ideal_merit",
+)
+
+
+def _camel(suffix):
+    """``prestige_local_merit`` -> ``prestigeLocalMerit`` (legacy camelCase)."""
+    head, *tail = suffix.split("_")
+    return head + "".join(part.capitalize() for part in tail)
+
+
+#: accepted spellings per correlation metric, keyed by canonical name.  The
+#: first two entries are the current schema (per-step frame, report CSV).
+CORR_METRIC_ALIASES = {
+    "corr_" + suffix: (
+        "Corr_" + suffix,                  # current per-step frame
+        "Mean_of_Corr_" + suffix,          # current report CSV
+        "Corr_" + _camel(suffix),          # legacy camelCase frame
+        "Mean_of_Corr_" + _camel(suffix),  # legacy notebook call site
+        "corr_" + _camel(suffix),          # legacy frame, lowercase corr
+        "mean_corr_" + _camel(suffix),     # legacy report CSV
+    )
+    for suffix in CORR_METRIC_SUFFIXES
+}
+
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
+# order matters: strip the longest aggregation prefix first
+_AGGREGATED_PREFIXES = ("Mean_of_", "mean_of_", "Mean_", "mean_")
+
+
+def _canonical_corr_name(name):
+    """Canonical key of a correlation-family column, or None if outside the family.
+
+    Drops an aggregation prefix (``Mean_of_``/``mean_``), splits camelCase and
+    lowercases, so all three spellings of a metric share one key.  Names
+    outside the family return None and are never renamed.
+    """
+    key = name
+    for prefix in _AGGREGATED_PREFIXES:
+        if key.startswith(prefix):
+            key = key[len(prefix):]
+            break
+    key = _CAMEL_BOUNDARY.sub("_", key).lower()
+    return key if key in CORR_METRIC_ALIASES else None
+
+
+def _is_aggregated(name):
+    """True for the aggregated (``Mean_of_``) column of a metric family."""
+    return name.startswith(_AGGREGATED_PREFIXES)
+
 
 def _apply_legacy_shim(df):
     """Rename legacy report columns to their current names (returns df unchanged if none)."""
@@ -35,6 +105,15 @@ def _apply_legacy_shim(df):
         for old, new in LEGACY_COLUMN_RENAMES.items()
         if old in df.columns and new not in df.columns
     }
+    # correlation family: legacy spelling -> current schema name, keeping the
+    # aggregation prefix (Mean_of_ report column vs per-step model frame)
+    for col in df.columns:
+        key = _canonical_corr_name(col)
+        if key is None:
+            continue
+        target = ("Mean_of_" if _is_aggregated(col) else "") + "Corr_" + key[len("corr_"):]
+        if col != target and target not in df.columns:
+            renames[col] = target
     return df.rename(columns=renames) if renames else df
 
 
@@ -53,6 +132,17 @@ def _resolve_column(df, name):
     ):
         if candidate is not None and candidate in df.columns:
             return candidate
+    key = _canonical_corr_name(name)
+    if key is not None:
+        candidates = [col for col in df.columns if _canonical_corr_name(col) == key]
+        # The aggregation class is part of the metric's identity: a per-step
+        # request must never take the run-mean column (a mean plotted as a time
+        # series is a wrong figure), and a mean request must not take a per-step
+        # series. Unresolvable within the class -> return the name unchanged, so
+        # the caller raises KeyError instead of plotting the wrong series.
+        preferred = [col for col in candidates if _is_aggregated(col) == _is_aggregated(name)]
+        if preferred:
+            return preferred[0]
     return name
 
 
@@ -79,17 +169,30 @@ def plot_smt(name, datasets_dict):
     plt.show()
 
 
-def plot_avg_time_vs_corr_prest_merit(foldername, curiosity,ax =None, length=401):
+def plot_avg_time_vs_corr_prest_merit(foldername, curiosity,ax =None, length=None):
+    """Mean correlation over time for one curiosity level.
 
-    corrs =  [[] for k in range(length)]
-    
+    ``length`` defaults to None, i.e. derived from the frames actually read: a
+    hard-coded horizon longer than the data pads the mean series with NaN and
+    floods numpy with "Mean of empty slice" warnings (1601 vs 201 steps on the
+    fresh longitudinal companion frames emitted 30,803 of them), so the horizon
+    is measured, not assumed.  An explicit ``length`` is still honoured.
+    """
+
+    corrs = {}
+
     for filename in os.listdir(foldername):
         if  f"curiosity{curiosity}" in filename:
             df = read_csv(os.path.join(foldername, filename))
-            for step, corr in zip(df['Step'], df['corr_prestige_localMerit']):
-                corrs[step].append(corr)
+            # current frames carry Corr_prestige_local_merit, legacy frames
+            # corr_prestige_localMerit; the shim resolves either spelling
+            corr_col = _resolve_column(df, "Corr_prestige_local_merit")
+            for step, corr in zip(df['Step'], df[corr_col]):
+                corrs.setdefault(int(step), []).append(corr)
 
-    mean_corrs = [np.mean(corrs_at_t) for corrs_at_t in corrs]
+    if length is None:
+        length = (max(corrs) + 1) if corrs else 0
+    mean_corrs = [np.mean(corrs[t]) if t in corrs else np.nan for t in range(length)]
     if ax is None:
         fig, ax = plt.subplots()
         
@@ -105,7 +208,7 @@ def plot_all_curiosities(foldername):
     unique_curiosities = list(set(curiosities))
     unique_curiosities.sort()
     for curiosity in unique_curiosities:
-        plot_avg_time_vs_corr_prest_merit(foldername, curiosity, ax=ax,length=1601)
+        plot_avg_time_vs_corr_prest_merit(foldername, curiosity, ax=ax)
     ax.legend()
     plt.show()
 
