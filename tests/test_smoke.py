@@ -11,6 +11,14 @@ Canary run (3 agents, seeded, 30 steps) asserting:
 2. a same-seed rerun is bit-identical;
 3. a newcomer run (agent_generation_time=0.1, step_limit=20) completes with
    more than 3 scientists.
+4. regression BUG-0002 (4-arg Gaussian);
+5. regression BUG-0003 (append-mode header);
+6. ideal-merit pairing audit: synthetic 3-agent case against a
+   hand-computed greedy optimum (sorted-to-sorted pairing) plus the
+   ideal_merit_cum accumulator;
+7. seed identity columns (agent_seed, landscape_seed) in the report;
+8. binding probe flags a mu-ignoring constant generator;
+9. entry_prestige_stock knob: validation and both alternate stocks run.
 """
 import os
 import sys
@@ -20,9 +28,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 
-from sciencemodels import MyModel
+from sciencemodels import MyModel, metrics
 from sciencemodels.landscapes import Gaussian, multipleGaussians, uniform
-from sciencemodels.model import generate_data_parametric_exploration
+from sciencemodels.model import (
+    generate_data_parametric_exploration,
+    probe_agent_generation_binding,
+)
 
 CANARY_PARAMS = {
     "n_agents": 3,
@@ -108,6 +119,116 @@ def main():
         f"append-mode header check OK: {len(lines)} lines = "
         f"1 header + {len(data_rows)} data rows"
     )
+
+    # 6. ideal-merit pairing audit (synthetic, hand-computed optimum):
+    #    3 agents on a 4x4 field, harvest 0.5. Peak 1.0 at (1,1) holds A
+    #    and C (stacked), B sits on the 0.4 tile at (0,3). Actual harvests
+    #    (position-sorted stacking): B 0.20, A 0.50, C 0.25. Greedy ideal
+    #    (3 depleting slots): 0.50, 0.25, 0.25. Sorted-to-sorted losses:
+    #    A 0.00, C 0.00, B -0.05; the stacked site averages to 0.00 each.
+    #    (Pre-fix head-pairing gave A=C=-0.125, B=-0.30.)
+    class _FakeLayer:
+        def __init__(self, data):
+            self.data = data
+
+    class _FakeGrid:
+        def __init__(self, prev, know):
+            self.properties = {
+                "previous_knowledge": _FakeLayer(prev),
+                "knowledge": _FakeLayer(know),
+            }
+
+    class _FakeAgent:
+        def __init__(self, pos):
+            self.pos = pos
+            # Scientist (agents.py) presets ideal_Merit=0 but defines no
+            # ideal_merit_cum - the fake mirrors that so the accumulator's
+            # lazy init is exercised on the real code path.
+            self.ideal_Merit = 0
+
+    class _FakeModel:
+        def __init__(self, agents, prev, know, harvest):
+            self.agents = agents
+            self.number_agents = len(agents)
+            self.grid = _FakeGrid(prev, know)
+            self.harvest = harvest
+
+    field = np.array(
+        [
+            [0.1, 0.2, 0.3, 0.4],
+            [0.5, 1.0, 0.2, 0.1],
+            [0.3, 0.2, 0.4, 0.5],
+            [0.1, 0.1, 0.2, 0.3],
+        ],
+        dtype=np.float64,
+    )
+    A, B, C = _FakeAgent((1, 1)), _FakeAgent((0, 3)), _FakeAgent((1, 1))
+    fake = _FakeModel([A, B, C], field.copy(), field.copy(), np.float64(0.5))
+    metrics.update_ideal_merit(fake)
+    assert np.isclose(A.ideal_Merit, 0.0), A.ideal_Merit
+    assert np.isclose(C.ideal_Merit, 0.0), C.ideal_Merit
+    assert np.isclose(B.ideal_Merit, -0.05), B.ideal_Merit
+    assert np.allclose(
+        fake.grid.properties["previous_knowledge"].data, field
+    ), "previous_knowledge not refreshed from knowledge"
+    # second call on the refreshed field reproduces the same losses and
+    # accumulates them (welfare-round need: cumulative accumulator)
+    metrics.update_ideal_merit(fake)
+    assert np.isclose(A.ideal_merit_cum, 0.0), A.ideal_merit_cum
+    assert np.isclose(C.ideal_merit_cum, 0.0), C.ideal_merit_cum
+    assert np.isclose(B.ideal_merit_cum, -0.1), B.ideal_merit_cum
+    print(
+        f"ideal-merit pairing audit OK: A={A.ideal_Merit}, C={C.ideal_Merit},"
+        f" B={B.ideal_Merit} (hand-computed 0.0, 0.0, -0.05);"
+        f" cum after 2 calls: A={A.ideal_merit_cum}, B={B.ideal_merit_cum}"
+    )
+
+    # 7. seed identity columns in the end-of-run report (welfare-round
+    #    need): the report carries agent_seed and the landscape seed (the
+    #    model injects agent_seed into generation_params, so the two
+    #    columns agree by construction)
+    assert "agent_seed" in report, "report missing agent_seed"
+    assert report["agent_seed"] == CANARY_PARAMS["agent_seed"], report["agent_seed"]
+    assert "landscape_seed" in report, "report missing landscape_seed"
+    assert report["landscape_seed"] == report["agent_seed"]
+    print(
+        f"seed columns OK: agent_seed={report['agent_seed']},"
+        f" landscape_seed={report['landscape_seed']}"
+    )
+
+    # 8. binding probe for agent_generation_function (welfare-round
+    #    need): a constant generator is flagged inert; identity binds
+    probe_rng = np.random.default_rng(0)
+    assert (
+        probe_agent_generation_binding(lambda mu, r, p: 0.7, probe_rng, {})
+        is True
+    ), "constant generator not flagged inert"
+    assert (
+        probe_agent_generation_binding(lambda mu, r, p: mu, probe_rng, {})
+        is False
+    ), "identity generator wrongly flagged inert"
+    print("binding probe OK: constant generator flagged inert, identity binds")
+
+    # 9. entry-prestige-stock knob: invalid values raise; both alternate
+    #    stocks complete a seeded run with entry and reach the report
+    try:
+        MyModel(**dict(CANARY_PARAMS, entry_prestige_stock="bogus"))
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid entry_prestige_stock accepted")
+    for stock in ("prestige_vanishing", "prestige_visibility"):
+        stock_model = MyModel(
+            **dict(
+                CANARY_PARAMS,
+                agent_generation_time=0.1,
+                step_limit=10,
+                entry_prestige_stock=stock,
+            )
+        )
+        stock_report = stock_model.run_mode_for_bulk()
+        assert stock_report["entry_prestige_stock"] == stock
+    print("entry_prestige_stock OK: validated, both alternate stocks run")
 
     print("ALL SMOKE TESTS PASSED")
 

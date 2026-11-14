@@ -38,6 +38,7 @@ class MyModel(mesa.Model):
     total_initial_knowledge: np.float64
     avg_current_agent_knowledge: np.float64
     agent_avg_distance: np.float64
+    entry_prestige_stock: str
 
     def _init_grid(
         self, cell_init_function: Callable[[int, int, int, Any, Generator]]
@@ -132,6 +133,7 @@ class MyModel(mesa.Model):
         use_visibility_reward: bool = True,
         knowledge_normalization: str = "share",
         prestige_accrual: str = "harvested",
+        entry_prestige_stock: str = "prestige",
     ):
         """parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc"""
         super().__init__(seed=agent_seed)
@@ -163,6 +165,14 @@ class MyModel(mesa.Model):
                 + repr(prestige_accrual)
             )
         self.prestige_accrual = prestige_accrual
+        if entry_prestige_stock not in (
+            "prestige", "prestige_vanishing", "prestige_visibility"
+        ):
+            raise ValueError(
+                "entry_prestige_stock must be 'prestige', 'prestige_vanishing'"
+                " or 'prestige_visibility', got " + repr(entry_prestige_stock)
+            )
+        self.entry_prestige_stock = entry_prestige_stock
 
         self.total_initial_knowledge = np.float64(0.0)
         self.avg_current_agent_knowledge = np.float64(0.0)
@@ -193,7 +203,9 @@ class MyModel(mesa.Model):
             )
 
         self.update_knowledge()
-        self.updateIdealMerit()
+        # updateIdealMerit is deliberately NOT called here: it runs inside
+        # end_loop_update() below, and a second init-time call would
+        # double-count step 0 in the ideal_merit_cum accumulator.
         # The reporters below are the model-side counterparts of the empirical
         # moments documented in docs/calibration_moments.yaml. That file is an
         # OPTION MENU only: per the owner's ruling (2026-11-13) the model is
@@ -252,6 +264,9 @@ class MyModel(mesa.Model):
                 "Corr_prestige_visibility_ideal_merit": metrics.correlation_reporter("ideal_Merit", "prestige_visibility"),
                 "Corr_prestige_vanishing_local_merit": metrics.correlation_reporter("current_local_merit", "prestige_vanishing"),
                 "Corr_prestige_vanishing_ideal_merit": metrics.correlation_reporter("ideal_Merit", "prestige_vanishing"),
+                "Ideal_merit_cum": lambda m: np.mean(
+                    [getattr(a, "ideal_merit_cum", 0.0) for a in m.agents]
+                ),
             },
             agent_reporters={
                 "prestige": "prestige",
@@ -260,6 +275,7 @@ class MyModel(mesa.Model):
                 "last_tile_knowledge": "last_tile_knowledge",
                 "curiosity": "curiosity",
                 "local_merit": "current_local_merit",
+                "ideal_merit_cum": "ideal_merit_cum",
             },
         )
         self.end_loop_update()
@@ -295,8 +311,11 @@ class MyModel(mesa.Model):
             agents_to_generate: int = np.floor(
                 self.steps * self.agent_generation_time
             ) - np.floor((self.steps - 1) * self.agent_generation_time)
-            prestige_agent_tuples = [(a.prestige, a) for a in self._scientists]
-            totalPrestige = sum([a.prestige for a in self._scientists])
+            entry_stock = self.entry_prestige_stock
+            prestige_agent_tuples = [
+                (getattr(a, entry_stock), a) for a in self._scientists
+            ]
+            totalPrestige = sum([getattr(a, entry_stock) for a in self._scientists])
             supervisors = []
             for _ in range(int(agents_to_generate)):
                 val = self.rng.uniform(0, totalPrestige)
@@ -310,6 +329,10 @@ class MyModel(mesa.Model):
                     self.initial_curiosity, self.rng, self.generation_params
                 )
                 a = Scientist(self, w, self.epsilon)
+                # accumulator init: covers the birth-step collection and
+                # final-wave newcomers, for whom no updateIdealMerit follows
+                # their birth (agents.py is outside this round's edit boundary)
+                a.ideal_merit_cum = np.float64(0.0)
                 coords = sup.pos
                 self.grid.place_agent(a, coords)
                 self._scientists.append(a)
@@ -403,6 +426,41 @@ class MyModel(mesa.Model):
             return self.datacollector.get_agent_vars_dataframe()
     
 
+def probe_agent_generation_binding(
+    agent_generation_function, rng, params, mu_lo=0.1, mu_hi=0.9
+):
+    """Binding probe for a swept agent_generation_function.
+
+    Calls the generator twice with different ``mu`` on the SAME rng and
+    compares the draws. Identical draws mean the generator ignores both
+    ``mu`` and the rng state (a constant): the swept axis is inert and the
+    probe warns loudly. Generators that read ``mu`` (identity) or advance
+    the rng (uniform) pass. Disclosed limitation: a generator that ignores
+    ``mu`` but still draws from ``rng`` (e.g. ``landscapes.uniform``) is
+    mu-inert yet passes this two-run identity check - the sweep-level guard
+    for that case is comparing the first completed cells along the axis, as
+    the welfare round did.
+    """
+    d1 = agent_generation_function(mu_lo, rng, params)
+    d2 = agent_generation_function(mu_hi, rng, params)
+    inert = bool(d1 == d2)
+    if inert:
+        print(
+            "WARNING: agent_generation_function "
+            + repr(
+                getattr(
+                    agent_generation_function,
+                    "__name__",
+                    agent_generation_function,
+                )
+            )
+            + " returned IDENTICAL draws for mu=" + repr(mu_lo) + " and mu="
+            + repr(mu_hi)
+            + " on the same rng - the swept axis (initial_curiosity) is INERT."
+        )
+    return inert
+
+
 def generate_data_parametric_exploration(
     filename,
     param_grid,
@@ -428,6 +486,12 @@ def generate_data_parametric_exploration(
 
     # Create a list of parameter names
     param_names = list(param_grid.keys())
+    # Binding guard (welfare-round need): probe a swept
+    # agent_generation_function for mu-inertness before burning the grid.
+    if callable(param_grid.get("agent_generation_function")):
+        probe_agent_generation_binding(
+            param_grid["agent_generation_function"], np.random.default_rng(0), {}
+        )
     # Loop through all combinations of parameters
     param_range = range(len(param_combinations))
     if skip_to > 0:

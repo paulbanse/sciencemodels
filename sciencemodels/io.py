@@ -41,7 +41,17 @@ def build_report(model):
         for k in model.datacollector.get_model_vars_dataframe().columns 
         if k[0].isupper()
     }
-    return {**a, **b, **c}
+    return {
+        **a,
+        **b,
+        **c,
+        # seed identity columns (welfare-round need): mesa stores the
+        # constructor seed as model._seed; the landscape seed is injected
+        # into generation_params from the same value (model.py __init__),
+        # so both columns carry the run's single seed by construction.
+        "agent_seed": model._seed,
+        "landscape_seed": model.generation_params.get("seed"),
+    }
 
 
 def save_run_csvs(model, csv_name):

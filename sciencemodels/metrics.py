@@ -70,20 +70,25 @@ def update_ideal_merit(model):
         pastpos = kpos
         ActualHarvestList.append([know*model.harvest, kpos, k])
     
-    #compute ideal harvest
-    for k in range(model.number_agents):
+    #compute ideal harvest: greedy allocation, one slot per agent in the
+    #model (under entry the population exceeds number_agents, so the slot
+    #count follows len(model.agents))
+    for k in range(len(model.agents)):
         pos = np.unravel_index(temp_knowledge_map.argmax(), temp_knowledge_map.shape) 
         IdealHarvestList.append((temp_knowledge_map[pos]*model.harvest,pos))
         temp_knowledge_map[pos] = temp_knowledge_map[pos] * (1- model.harvest)
-
-    #compute loss per agent
-    ActualHarvestList = sorted(ActualHarvestList, key= lambda L: L[0])
+    
+    #compute loss per agent: sorted-to-sorted pairing - the k-th largest
+    #actual harvest is matched against the k-th largest greedy-ideal
+    #harvest. (Pre-fix this paired every actual harvest against the ideal
+    #list's static head, which only advanced on an exact-zero loss, so
+    #below-head agents were measured against the single best tile.)
+    ActualHarvestList = sorted(ActualHarvestList, key= lambda L: L[0], reverse=True)
+    IdealHarvestList = sorted(IdealHarvestList, key= lambda L: L[0], reverse=True)
     for k in range(len(model.agents)):
-        loss = ActualHarvestList[k][0] - IdealHarvestList[0][0]
-        if loss == 0:
-            IdealHarvestList = IdealHarvestList[1:]
+        loss = ActualHarvestList[k][0] - IdealHarvestList[k][0]
         ActualHarvestList[k] = ActualHarvestList[k] + [loss]
-
+    
     # average loss per position
     decided_pos = []
     for (kharvested, kpos, k, loss) in ActualHarvestList:
@@ -93,7 +98,12 @@ def update_ideal_merit(model):
             for a in agents_on_site:
                 a.ideal_Merit = loss_on_site/(len(agents_on_site))
             decided_pos.append(kpos)
-
+    
+    # cumulative per-agent ideal-merit loss over the run (welfare-round
+    # need); lazy init keeps agents.py outside the edit boundary
+    for a in model.agents:
+        a.ideal_merit_cum = getattr(a, "ideal_merit_cum", 0.0) + a.ideal_Merit
+    
     model.grid.properties["previous_knowledge"].data = model.grid.properties["knowledge"].data.copy()
 
 
