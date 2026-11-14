@@ -59,7 +59,7 @@ class Scientist(mesa.Agent):
 
         return (
             dx + dy
-        )  # Manhattan distance on a torus    def incrPrestige(self, value):
+        )  # Manhattan distance on a torus
 
     def increase_prestige(self, value):
         self.prestige += value

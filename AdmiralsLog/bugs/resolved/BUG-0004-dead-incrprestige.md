@@ -6,7 +6,7 @@ tags: [bug, dead-code, agents]
 project: "sciencemodels"
 ---
 
-- **Status:** open
+- **Status:** resolved (2026-11-14, direct fix with proof)
 - **Date:** 2026-11-14
 - **Related:** `sciencemodels/agents.py:61-62`, `docs/conceptual_degrees_of_freedom.md` (v3.0)
 - **Spawned:** none
@@ -26,5 +26,12 @@ the pure-move rule; pinned by the shim/catalogue round (2026-11-14).
 
 ## Fix
 
-Not yet applied. Candidate: delete the dead definition (it has no callers),
-keeping the comment on its own line.
+Applied 2026-11-14 (session round): the comment tail `def incrPrestige(self,
+value):` was stripped from the distance-method line; the comment now ends at
+"Manhattan distance on a torus".
+
+## Resolution
+
+Verified first-hand 2026-11-14: byte-checked edit (`sed ... | cat -A`), and
+the full smoke test passes unchanged after the edit (canary green before and
+after).

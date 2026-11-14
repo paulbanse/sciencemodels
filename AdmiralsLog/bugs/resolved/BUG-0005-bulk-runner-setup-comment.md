@@ -6,7 +6,7 @@ tags: [bug, comments, bulk-runner]
 project: "sciencemodels"
 ---
 
-- **Status:** open
+- **Status:** resolved (2026-11-14, direct fix with proof)
 - **Date:** 2026-11-14
 - **Related:** `scripts/bulk_runner.py:22`
 - **Spawned:** none
@@ -25,4 +25,11 @@ Legacy comment drift, pinned by the shim/catalogue round (2026-11-14).
 
 ## Fix
 
-Not yet applied. Candidate: correct the comment to match the case values.
+Applied 2026-11-14 (session round): the chosen-setup comment now carries the
+actual 8-setup map ("0|1 randominit, 2|3 two gaussians, 4|5 six gaussians,
+6|7 noisy gaussian") matching the match-case below it.
+
+## Resolution
+
+Verified first-hand 2026-11-14: comment now agrees with the case values at a
+glance; smoke test green before and after.

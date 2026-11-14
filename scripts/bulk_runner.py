@@ -19,7 +19,7 @@ from sciencemodels.model import generate_data_parametric_exploration
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 chosen_setup = (
-    3  # 0 for randominit, 1 for 2 gaussians, 2 for 6 gaussians, 3 for noisy gaussian
+    3  # setup map: 0|1 randominit, 2|3 two gaussians, 4|5 six gaussians, 6|7 noisy gaussian
 )
 generation_params = {}
 
