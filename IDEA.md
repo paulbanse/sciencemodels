@@ -62,6 +62,7 @@ already decided.
 | `context/` | Background literature corpus with `FROZEN.md` | frozen, read-only (see Frozen Zones) |
 | `data/` | Run outputs (CSV), gitignored | generated |
 | `docs/` | Documentation and supplementary documents | live |
+| `output/reports/` | Round reports and generated outputs (owner directive 2026-11-14) | live |
 | `AdmiralsLog/` | Records: logs, decisions, bugs, ideas, unexplored, proposals, archive | live |
 | `AdmiralsLog/contributions/` | External contribution boundary (Franz, Paul, Niklas material) | live |
 | `helpers/` | Supporting tooling (created when its first file arrives) | planned |
@@ -107,7 +108,8 @@ here.
   (HR-docs), records in `AdmiralsLog/` subfolders (MO-docs), documentation in
   `docs/` (HR-docs; long-standing conceptual documents only --- plan-like
   documents move to the `AdmiralsLog/` first level at the latest when a
-  workplan supersedes them, owner ruling 2026-11-13); governance policy lives
+  workplan supersedes them, owner ruling 2026-11-13); round reports and
+  generated outputs in `output/reports/` (owner directive 2026-11-14); governance policy lives
   in the ADRs of `AdmiralsLog/decisions/` (normative, drafted as ADR-0001 and
   ADR-0002).
 - Naming: no spaces in filenames; record ids per the `AdmiralsLog/` charter;

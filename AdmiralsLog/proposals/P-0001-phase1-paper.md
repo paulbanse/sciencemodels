@@ -33,25 +33,25 @@ The model-internal evidence (nothing calibrated; owner ruling 2026-11-13)
 now forms a coherent mechanism story across independent probes:
 
 - The wedge opens under entry, in the ideal-merit channel: 17/18 entry cells
-  endstate-negative at horizon 200 (`docs/sensitivity_map_v1.md`), and the
+  endstate-negative at horizon 200 (`output/reports/sensitivity_map_v1.md`), and the
   claim survives at horizon 400 in 6/6 cells, 16/18 conjunctive
-  (`docs/career_flows_v1.md`). Curiosity is protective; noisy legibility
+  (`output/reports/career_flows_v1.md`). Curiosity is protective; noisy legibility
   widens the local-ideal gap without lowering average correlation.
 - Visibility weight is the dominant lever: welfare loss rises 10x-44x across
   the weight axis with a collapse knee at $\xi^* = 0.6$-$0.8$
-  (`docs/welfare_probe_v1.md`); the visibility toggle is nearly inert (2.6%),
+  (`output/reports/welfare_probe_v1.md`); the visibility toggle is nearly inert (2.6%),
   and entry doubles total loss through population, not per-agent pressure.
 - Cumulative advantage is endogenous: the newcomer-incumbent prestige gap
-  never closes (`docs/career_flows_v1.md`), robust in sign and persistence on
+  never closes (`output/reports/career_flows_v1.md`), robust in sign and persistence on
   the noisy landscape though smaller in size (4/5 findings hold, 1 qualifies;
-  `docs/career_flows_noisy_v1.md`).
+  `output/reports/career_flows_noisy_v1.md`).
 - Which prestige stock weights the supervisor channel changes how fast the
   wedge opens, not where ($\rho = 0.965$-$0.993$ rank agreement across
-  stocks; `docs/prestige_stock_v1.md`) --- the Goodhart target is the timing,
+  stocks; `output/reports/prestige_stock_v1.md`) --- the Goodhart target is the timing,
   not the location.
 - Measurement discipline is in place and honest: the ideal-merit pairing
   audit moved measured levels (anchor $-0.079 \to -0.023$) while orderings
-  survived re-measurement so far (`docs/career_flows_noisy_v1.md` measured
+  survived re-measurement so far (`output/reports/career_flows_noisy_v1.md` measured
   its own delta); a dedicated re-measure pass is running (2026-11-14) and
   its result gates the paper's numbers. The empirical moments remain a
   documented option menu (`docs/calibration_moments.yaml`), not targets.
