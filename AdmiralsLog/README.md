@@ -16,4 +16,4 @@ ruled out (`decisions/rejected/`, `bugs/deadends/`), what was fixed
 
 ## Register counters
 
-Next ids: ADR-0003, BUG-0006, DE-0001, IE-0001, UE-0001, P-0001.
+Next ids: ADR-0003, BUG-0006, DE-0001, IE-0001, UE-0001, P-0002.

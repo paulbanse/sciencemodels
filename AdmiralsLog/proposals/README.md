@@ -11,4 +11,4 @@ behaviour spawns an ADR, which cites the proposal in `Spawned:`. Naming:
 
 | P | Topic | Class | Status | Assignee |
 | --- | --- | --- | --- | --- |
-| (none yet) | - | - | - | - |
+| P-0001 | Phase-1 paper on the strength of waves 1-3: consolidate and proceed to drafting? | strategic | open | owner (ruling) |
