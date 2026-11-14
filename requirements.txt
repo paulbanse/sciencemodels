@@ -3,5 +3,8 @@ mesa==3.2.0
 numpy==2.3.2
 scipy==1.16.1
 # imported by bulk_runner.py / analysis notebooks; missed by the pipreqs run
-joblib>=1.3
-pandas>=2.0
+# miss-check 2026-11-14: the active env carries numpy 2.5.4 / scipy 1.18.1 /
+# matplotlib 3.11.2 while the pins below predate it; drift reported to the
+# owner (rebuild env from lock vs refresh lock from env), not silently resolved.
+joblib==1.6.0
+pandas==3.1.0
