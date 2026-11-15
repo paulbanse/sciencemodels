@@ -45,6 +45,7 @@ class MyModel(mesa.Model):
     credit_sharing: str
     closeness_mode: str
     dyadic_visibility_stock: str
+    dyadic_move_pull: np.float64
     links: set
 
     def _init_grid(
@@ -147,6 +148,7 @@ class MyModel(mesa.Model):
         credit_sharing: str = "structural",
         closeness_mode: str = "grid",
         dyadic_visibility_stock: str = "prestige_visibility",
+        dyadic_move_pull: float = 0.0,
     ):
         """parameters :  number of agents, number of connections, curiosity, noise intensity, harvest,  size, initCellfunc"""
         super().__init__(seed=agent_seed)
@@ -224,6 +226,20 @@ class MyModel(mesa.Model):
         self.credit_sharing = credit_sharing
         self.closeness_mode = closeness_mode
         self.dyadic_visibility_stock = dyadic_visibility_stock
+        if not np.isfinite(dyadic_move_pull) or dyadic_move_pull < 0.0:
+            raise ValueError(
+                "dyadic_move_pull must be finite and non-negative, got "
+                + repr(dyadic_move_pull)
+            )
+        if dyadic_move_pull > 0.0 and dyadic_mode == "off":
+            # The pull reads model.links; with the layer off there are none, so
+            # a positive pull would be silently inert - the trap ADR-0001's
+            # canary discipline exists to prevent. Refuse it loudly.
+            raise ValueError(
+                "dyadic_move_pull > 0 requires an active dyadic_mode "
+                "(it reads model.links); got dyadic_mode='off'"
+            )
+        self.dyadic_move_pull = np.float64(dyadic_move_pull)
         # Path B dyadic state: the declared (choice) link set, the per-step
         # co-harvest (production) teams, and the four dyadic statistics.
         # With dyadic_mode="off" no rng is consumed and no dynamic state
@@ -421,6 +437,27 @@ class MyModel(mesa.Model):
                 self._scientists.append(a)
             for agent in self._scientists:
                 self.grid.properties["explored"].data[agent.pos] = True
+
+    def linked_partners(self, agent):
+        """The Scientist objects ``agent`` holds an active declared link with.
+
+        Read by the dyadic movement coupling (``dyadic_move_pull``) inside the
+        reward computation, once per candidate tile, so it is deliberately
+        cheap and allocation-light. Order is by ``unique_id``: the sum in
+        ``Scientist.partner_proximity`` must not depend on set iteration order,
+        or a rerun could differ in the last ulp.
+        """
+        if not self.links:
+            return ()
+        by_id = {a.unique_id: a for a in self.agents}
+        ids = []
+        for pair in self.links:
+            if agent.unique_id not in pair:
+                continue
+            other_id = next(iter(pair - {agent.unique_id}))
+            if other_id in by_id:
+                ids.append(other_id)
+        return tuple(by_id[i] for i in sorted(ids))
 
     def _redistribute_equal_split(self):
         """Path B Q8: pool each tile's buffered prestige accrual among the

@@ -93,16 +93,37 @@ class Scientist(mesa.Agent):
     def _compute_visibility(self, avg_agent_distance: np.float64) -> np.float64:
         return (self.model.agent_avg_distance + 1.0) / (avg_agent_distance + 1.0)
 
+    def partner_proximity(self, pos: Coordinate) -> np.float64:
+        """Mean inverse torus distance from ``pos`` to this agent's linked partners.
+
+        ``1/(d+1)``: a co-located partner scores 1.0, the term decays with
+        distance and never reaches 0 for a finite grid. Returns ``0.0`` when
+        the agent holds no active link, which leaves the dyadic movement
+        multiplier at exactly 1.0.
+
+        Path B v2 (movement coupling). The link set is updated at the END of a
+        step (``metrics.dyadic_step``), so the pull reads the previous step's
+        links: a one-step lag, disclosed in the round's report.
+        """
+        partners = self.model.linked_partners(self)
+        if not partners:
+            return np.float64(0.0)
+        total = np.float64(0.0)
+        for partner in partners:
+            total = total + np.float64(1.0) / np.float64(
+                partner.compute_distance(pos) + 1
+            )
+        return total / np.float64(len(partners))
+
     def compute_all_rewards(
         self, pos: Coordinate, novelty: np.float64
     ) -> tuple[np.float64, np.float64]:
         """This part is just a test, we change the network reward by just the avg distance of
         all agents divided the average distance of the current agent"""
         if not self.model.use_distance:
-            return (
-                self.curiosity * novelty / self.model.avg_current_agent_knowledge,
-                np.float64(0.0),
-            )
+            reward = self.curiosity * novelty / self.model.avg_current_agent_knowledge
+            visibility = np.float64(0.0)
+            return self._apply_move_pull(pos, reward), visibility
 
         others = [a for a in self.model._scientists if a is not self]
         dists = np.fromiter(
@@ -142,7 +163,28 @@ class Scientist(mesa.Agent):
         # (3) some version of either (1) or (2) where the pull effect is weighted by prestige
         # else:
         #    reward = self.curiosity * Novelty/ self.model.avgcurrentAgentKnowledge + (1-self.curiosity) * visibility
-        return reward, visibility
+        # (3) is the Path B v2 movement coupling: see _apply_move_pull.
+        return self._apply_move_pull(pos, reward), visibility
+
+    def _apply_move_pull(self, pos: Coordinate, reward: np.float64) -> np.float64:
+        """Path B v2: multiply a candidate tile's reward by the partner pull.
+
+        ``reward *= 1 + dyadic_move_pull * partner_proximity(pos)`` makes tiles
+        nearer the agent's declared partners more attractive, which is the one
+        channel from the choice layer (``model.links``) to movement and hence
+        to the co-harvest production layer. Skipped entirely when the pull is
+        0.0 or the agent has no link, so ``dyadic_move_pull=0.0`` is
+        bit-identical to Path B v1 (not merely equal to printed precision):
+        no multiplication by 1.0 is performed at all.
+        """
+        if self.model.dyadic_mode == "off" or self.model.dyadic_move_pull <= 0.0:
+            return reward
+        proximity = self.partner_proximity(pos)
+        if proximity <= 0.0:
+            return reward
+        return reward * (
+            np.float64(1.0) + self.model.dyadic_move_pull * proximity
+        )
 
     def local_merit(self, pos) -> np.float64:
         return metrics.local_merit(self.model, pos)

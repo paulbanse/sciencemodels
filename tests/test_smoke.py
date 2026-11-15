@@ -304,6 +304,78 @@ def main():
             f"Path B binding OK: {dyadic_mode} lambda0={outs[0.0]} lambda1={outs[1.0]}"
         )
 
+    # 10e. Path B v2 movement coupling (dyadic_move_pull).
+    #      (i) pull=0.0 reproduces Path B v1 bit-for-bit: the anchors below were
+    #          measured in the v1 tree (HEAD b28557b, pre-coupling code) on this
+    #          exact config, so equality here is an identity claim, not a
+    #          tolerance. The round's driver repeats the check against the
+    #          stored v1 cell CSVs on 60 numeric columns (control arm).
+    #      (ii) pull>0 opens the choice -> movement -> production channel: the
+    #          co-harvest (production) moments must respond to BOTH the pull at
+    #          fixed lambda and to lambda at fixed pull.
+    MOVE_PARAMS = dict(
+        BIND_PARAMS,
+        dyadic_mode="logit",
+        credit_sharing="equal_split",
+        dyadic_lambda=1.0,
+    )
+    V1_ANCHOR = {
+        "mean_team_size": 4.333333333333333,
+        "repeated_collab_share": 0.78125,
+        "n_active_links": 2,
+        "mean_prestige": 0.02584457750589488,
+        "team_tm": 4.239837398373984,
+        "rep_tm": 0.8680933654246947,
+        "links_tm": 1.7073170731707317,
+        "c_ideal_tm": 0.19920101324636486,
+    }
+    m0 = MyModel(**dict(MOVE_PARAMS, dyadic_move_pull=0.0))
+    r0 = m0.run_mode_for_bulk()
+    dc0 = m0.datacollector.get_model_vars_dataframe()
+    got0 = {
+        "mean_team_size": r0["mean_team_size"],
+        "repeated_collab_share": r0["repeated_collab_share"],
+        "n_active_links": int(r0["n_active_links"]),
+        "mean_prestige": r0["mean_prestige"],
+        "team_tm": float(dc0["mean_team_size"].mean()),
+        "rep_tm": float(dc0["repeated_collab_share"].mean()),
+        "links_tm": float(dc0["n_active_links"].mean()),
+        "c_ideal_tm": float(dc0["Corr_prestige_ideal_merit"].mean()),
+    }
+    for key, want in V1_ANCHOR.items():
+        assert got0[key] == want, (
+            f"dyadic_move_pull=0.0 is not bit-identical to Path B v1: "
+            f"{key}={got0[key]!r} != {want!r}"
+        )
+    print(
+        "Path B v2 identity OK: dyadic_move_pull=0.0 reproduces Path B v1 on "
+        f"{len(V1_ANCHOR)} anchors"
+    )
+
+    prod = {}
+    for lam, pull in ((1.0, 0.0), (0.0, 1.0), (1.0, 1.0)):
+        mm = MyModel(
+            **dict(MOVE_PARAMS, dyadic_lambda=lam, dyadic_move_pull=pull)
+        )
+        mm.run_mode_for_bulk()
+        dcm = mm.datacollector.get_model_vars_dataframe()
+        prod[(lam, pull)] = (
+            float(dcm["mean_team_size"].mean()),
+            float(dcm["repeated_collab_share"].mean()),
+            float(dcm["n_active_links"].mean()),
+        )
+    base, lam_only, both = prod[(1.0, 0.0)], prod[(0.0, 1.0)], prod[(1.0, 1.0)]
+    assert base != both, f"the pull does not bind at fixed lambda: {base} vs {both}"
+    assert lam_only != both, f"lambda does not bind at fixed pull: {lam_only} vs {both}"
+    assert base[0] != both[0] or base[1] != both[1], (
+        "the pull moves the choice layer only, not the production layer: "
+        f"team/rep {base[:2]} vs {both[:2]}"
+    )
+    print(
+        "Path B v2 coupling OK: team/rep/links "
+        f"pull0_lam1={base} lam0_pull1={lam_only} lam1_pull1={both}"
+    )
+
     for bad in (
         dict(dyadic_mode="bogus"),
         dict(dyadic_lambda=1.5),
@@ -311,6 +383,8 @@ def main():
         dict(credit_sharing="bogus"),
         dict(closeness_mode="bogus"),
         dict(dyadic_visibility_stock="bogus"),
+        dict(dyadic_move_pull=-0.5),
+        dict(dyadic_mode="off", dyadic_move_pull=1.0),
     ):
         try:
             MyModel(**dict(CANARY_PARAMS, **bad))
@@ -318,7 +392,10 @@ def main():
             pass
         else:
             raise AssertionError(f"invalid dyadic knob accepted: {bad}")
-    print("Path B knob validation OK: all six knobs reject invalid values")
+    print(
+        "Path B knob validation OK: seven knobs reject invalid values, and a "
+        "positive pull with the layer off is refused"
+    )
 
     print("ALL SMOKE TESTS PASSED")
 
