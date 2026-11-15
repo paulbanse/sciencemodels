@@ -15,7 +15,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import textwrap
 
 import diagram_templates as T
 import round_report_data as D
@@ -196,6 +199,153 @@ def figure_remeasure_delta(outdir: Path | str | None = None):
     return fig, out, counts
 
 
+
+# --------------------------------------------------------------------------
+# F7 -- M0 cognitive division of labour: diversity buys alignment, not speed
+# --------------------------------------------------------------------------
+F7_STEM = "F7_m0_cognitive_division_of_labor"
+
+#: Arms in appearance order: the two substantive cohorts, then the pooled
+#: sweep reference. Assigned explicitly so no sort decides which arm is purple.
+F7_ARMS_A = ("mixed", "homogeneous", "sweep average")
+F7_ARMS_B = ("mixed", "homogeneous")
+
+
+def _f7_colors(s: dict) -> dict:
+    return {"mixed": T.PALETTE["purple"], "homogeneous": T.PALETTE["orange"],
+            "sweep average": T.PALETTE["gray_light"]}
+
+
+def _f7_panel(ax, wide: pd.DataFrame, lands: list[str], arms: tuple[str, ...],
+              s: dict, *, fmt: str, ylabel: str, title: str,
+              tick_second: dict[str, str] | None = None) -> None:
+    """One grouped-bar panel, drawn from an already validated wide frame.
+
+    The templates build one axes per figure, so a two-panel file composes them
+    from the template's own parts: ``_wide`` (duplicate/gap/level checks),
+    ``_cosmetics`` (title, spines, grid) and ``HOUSE_STYLE`` (sizes, dpi).
+    """
+    colors = _f7_colors(s)
+    n_grp = len(arms)
+    width = s["bar_width"] / n_grp
+    x = np.arange(len(lands))
+    tops = []
+    for j, arm in enumerate(arms):
+        vals = wide[arm].reindex(lands).to_numpy(float)
+        off = (j - (n_grp - 1) / 2) * width
+        hatch = "//" if arm == "sweep average" else None
+        bars = ax.bar(x + off, vals, width=width * 0.94,
+                      color=colors[arm], hatch=hatch,
+                      edgecolor=T.PALETTE["gray"] if hatch else "none",
+                      label=arm)
+        ax.bar_label(bars, fmt=lambda v: fmt.format(v), fontsize=s["note_size"],
+                     padding=2)
+        # 95 % CI of the run-level mean, drawn only where the frame carries one
+        ci = wide.attrs.get(arm)
+        if ci is not None:
+            lo, hi = ci
+            ax.errorbar(x + off, vals, yerr=[vals - lo, hi - vals], fmt="none",
+                        ecolor=T.PALETTE["gray"], elinewidth=1.0, capsize=2.4)
+        tops.append(np.nanmax(vals))
+    ax.set_xticks(x, [f"{land}\n{tick_second.get(land, '')}" if tick_second
+                      else land for land in lands], fontsize=s["tick_size"])
+    T._cosmetics(ax, s, title, "", ylabel)
+    hi = float(np.nanmax(tops)) * 1.28
+    ax.set_ylim(0.0, hi if hi > 0 else 1.0)
+    ax.legend(fontsize=s["tick_size"], frameon=False, loc="upper right")
+
+
+def figure_cognitive_division_of_labor(outdir: Path | str | None = None):
+    """F7 -- the two M0 claims of the sketch, drawn against their artifacts.
+
+    Panel A is the sketch's "early breakthrough acceleration" claim and Panel B
+    its "merit-prestige alignment" claim, both measured on the same four
+    landscape pairs so the reader can see that the second survives and the
+    first does not: the matched comparison (mixed vs the swept file's mu=0.5
+    cohort) shows no speed-up, while the alignment gain is large on MultG2 and
+    reverses on Noisy2. The pooled sweep average -- the only comparator under
+    which a 2.6x ratio exists -- is drawn as a hatched grey reference so the
+    sketch's number can be located rather than restated.
+    """
+    tidy, caps = D.m0_division_of_labor()
+    lands = list(D.M0_FILES)
+    s = {**T.HOUSE_STYLE, "figsize": (11.4, 5.0)}
+    out = _outdir(outdir) / f"{F7_STEM}.png"
+
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=s["figsize"])
+
+    # ---- Panel A: steps to 10 % harvested --------------------------------
+    a = tidy[tidy["metric"] == "h10_steps"]
+    wide_a = T._wide(a.rename(columns={"value": "h10_steps"}),
+                     "landscape", "h10_steps", "arm")
+    for arm in F7_ARMS_A:
+        sub = a[a["arm"] == arm].set_index("landscape").reindex(lands)
+        wide_a.attrs[arm] = (sub["ci_lo"].to_numpy(float),
+                             sub["ci_hi"].to_numpy(float))
+    verdict_a = ("no speed-up from a mixed cohort"
+                 if caps["speed_claim"] == "no acceleration"
+                 else f"mixed cohort {caps['speed_claim']}")
+    _f7_panel(axA, wide_a, lands, F7_ARMS_A, s, fmt="{:.1f}",
+              ylabel="steps to 10 % knowledge harvested",
+              title=f"A · Harvest speed: {verdict_a}",
+              tick_second={land: f"×{caps['ratios'][land]['homog_over_mixed']:.2f}"
+                           for land in lands})
+
+    # ---- Panel B: merit-prestige alignment -------------------------------
+    b = tidy[tidy["metric"] == "c_ideal"]
+    wide_b = T._wide(b.rename(columns={"value": "c_ideal"}),
+                     "landscape", "c_ideal", "arm")
+    for arm in F7_ARMS_B:
+        sub = b[b["arm"] == arm].set_index("landscape").reindex(lands)
+        wide_b.attrs[arm] = (sub["ci_lo"].to_numpy(float),
+                             sub["ci_hi"].to_numpy(float))
+    _f7_panel(axB, wide_b, lands, F7_ARMS_B, s, fmt="{:+.3f}",
+              ylabel="corr(prestige, ideal merit), run mean",
+              title=f"B · Alignment: diversity helps in "
+                    f"{caps['align_better']} of {caps['n_landscapes']} landscapes",
+              tick_second={land: f"Δ {caps['deltas'][land]:+.3f}"
+                           for land in lands})
+
+    note = textwrap.fill(
+        "source: data/figures_v1/run_number0-7.csv — the 8 canonical BULK_SETUPS, "
+        f"{D.M0_REPEATS} repeats per cell, step_limit 200. mixed: newcomers draw "
+        "c ~ U(0,1) (files 1/3/5/7). homogeneous: the swept file (0/2/4/6) at "
+        "μ = 0.5, where newcomers inherit c = 0.5. Grey hatched: all 11 swept "
+        "cohorts pooled (μ = 0, .1, …, 1) — an average over populations, not a "
+        "cohort, and the only comparator under which the sketch's 2.6× exists "
+        f"(censored at μ ≤ 0.1: {caps['reach']['MultG2|sweep average']['censored']}/110 "
+        "runs on MultG2 never reach 10 %). × under a landscape = steps ratio "
+        "homogeneous/mixed; Δ = mixed minus homogeneous. No MultG2_no_dist artifact "
+        "exists in the repo (no sweep ran use_distance=False), so the fourth pair is "
+        "randominit. Model-internal, no empirical calibration.",
+        width=176)
+    fig.text(0.006, 0.012, note, fontsize=s["note_size"], color=T.PALETTE["gray"],
+             va="bottom", linespacing=1.45)
+    fig.tight_layout(rect=(0, 0.105, 1, 1))
+    fig.savefig(out, dpi=s["dpi"])
+    pdf = out.with_suffix(".pdf")
+    fig.savefig(pdf)
+
+    export = tidy[tidy["metric"].isin(["h10_steps", "c_ideal", "harvest_pct"])].copy()
+    export["kind"] = "drawn"
+    extra = []
+    for land in lands:
+        r = caps["ratios"][land]
+        extra += [
+            {"landscape": land, "arm": "homogeneous/mixed", "metric": "ratio_h10_steps",
+             "value": r["homog_over_mixed"], "kind": "annotated"},
+            {"landscape": land, "arm": "sweep/mixed", "metric": "ratio_h10_steps",
+             "value": r["sweep_over_mixed"], "kind": "annotated"},
+            {"landscape": land, "arm": "mixed-homogeneous", "metric": "delta_c_ideal",
+             "value": caps["deltas"][land], "kind": "annotated"},
+            {"landscape": land, "arm": "mixed-homogeneous", "metric": "harvest_gap_pp",
+             "value": caps["harvest_gap_pp"][land], "kind": "annotated"},
+        ]
+    export = pd.concat([export, pd.DataFrame(extra)], ignore_index=True)
+    csv_path = T.write_figure_data(export, out)
+    return fig, out, {"caps": caps, "csv": csv_path, "pdf": pdf}
+
+
 BUILDERS = [
     ("F1", figure_sensitivity, "T1 sensitivity (post-audit arm)"),
     ("F2", figure_career_flows, "T3 career flows (clean + noisy)"),
@@ -203,6 +353,7 @@ BUILDERS = [
     ("F3", figure_welfare, "T4 welfare probe"),
     ("F4", figure_prestige_stock, "W3-A prestige stock"),
     ("F5", figure_remeasure_delta, "N1/N2 re-measure"),
+    ("F7", figure_cognitive_division_of_labor, "M0 cognitive division of labour"),
 ]
 
 

@@ -206,6 +206,7 @@ template provides one):
 - `output/report_notebook_v1/F3_welfare_loss_vs_visibility_weight.png`
 - `output/report_notebook_v1/F4_prestige_stock_wedge_matrix.png`
 - `output/report_notebook_v1/F5_pairing_audit_paired_delta.png` (+ `_data.csv`)
+- `output/report_notebook_v1/F7_m0_cognitive_division_of_labor.png` (+ `_data.csv`)
 
 Sources are read-only: `data/remeasure_v1/`, `data/sensitivity_v1/`,
 `data/career_flows_v1/`, `data/career_flows_noisy_v1/`, `data/welfare_v1/`,

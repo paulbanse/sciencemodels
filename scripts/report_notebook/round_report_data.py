@@ -503,5 +503,164 @@ def manifest() -> pd.DataFrame:
          "net": f"{remeasure_pairs()[1]['t1_paired_net']} T1 pairs "
                 f"+ {remeasure_pairs()[1]['w_v05_paired_net']} W_v05 pairs "
                 f"(W arm excluded: {remeasure_pairs()[1]['w_paired_net']})"},
+        {"round": "M0 cognitive division of labour (F7)",
+         "gross": "8 setups x (110 swept + 10 mixed) = 480 runs",
+         "net": f"{m0_division_of_labor()[1]['n_runs_sweep']} swept + "
+                f"{m0_division_of_labor()[1]['n_runs_homog']} homogeneous + "
+                f"{m0_division_of_labor()[1]['n_runs_mixed']} mixed run-level "
+                f"observations in data/figures_v1/run_number0-7.csv"},
     ]
     return pd.DataFrame(rows)
+
+
+# ---------------------------------------------------------------------------
+# M0 -- cognitive division of labour: the 8 canonical BULK_SETUPS of figures_v1
+# ---------------------------------------------------------------------------
+#: ``run_number<k>.csv`` to (landscape, design). The design flag is
+#: ``BulkSetup.curiosity_swept`` in ``sciencemodels.sweeps``: swept = 11 runs at
+#: mu in {0, .1, ..., 1} with newcomers inheriting mu (a homogeneous cohort at
+#: each mu); not swept = one run at mu = 0.5 with newcomers drawn U(0, 1) (a
+#: mixed population, mean curiosity 1/2). Files 0/2/4/6 are swept, 1/3/5/7 mixed.
+M0_FILES = {
+    "randominit": {"swept": 0, "mixed": 1},
+    "MultG2":     {"swept": 2, "mixed": 3},
+    "MultG6":     {"swept": 4, "mixed": 5},
+    "Noisy2":     {"swept": 6, "mixed": 7},
+}
+#: ``harvested_10_step`` carries a sentinel rather than a step count when the
+#: run never reached 10 %: ``step_limit + 50``. Never average it as if it were
+#: a step count without saying so.
+M0_NEVER = 250.0
+M0_HOMOG_MU = 0.5
+M0_REPEATS = 10
+M0_ARMS = ("mixed", "homogeneous", "sweep average")
+
+
+def _m0_ci(x: pd.Series) -> tuple[float, float, float, int]:
+    """Mean and 95 % CI of a run-level mean, t-based, over the finite runs."""
+    v = pd.Series(x).astype(float).dropna().to_numpy()
+    n = int(v.size)
+    if n < 2:
+        return (float(v.mean()) if n else float("nan"), float("nan"),
+                float("nan"), n)
+    m = float(v.mean())
+    se = float(v.std(ddof=1) / np.sqrt(n))
+    from scipy import stats as _st  # deferred: the module stays numpy/pandas
+    # t(0.975, n-1): 2.262 at n = 10. Do NOT hand-type the critical value.
+    half = float(_st.t.ppf(0.975, n - 1) * se)
+    return m, m - half, m + half, n
+
+
+def m0_division_of_labor() -> tuple[pd.DataFrame, dict]:
+    """Run-level moments of the M0 cognitive-division-of-labour comparison.
+
+    Returns ``(tidy, caps)``: ``tidy`` has one row per (landscape, arm, metric)
+    with ``value``, ``ci_lo``, ``ci_hi``, ``n`` -- exactly the numbers a figure
+    may draw; ``caps`` carries the derived ratios, deltas and censoring counts
+    so no annotated number has to be typed anywhere.
+
+    The three arms are NOT interchangeable comparators:
+
+    - ``homogeneous``: the swept file at ``mu = 0.5``; every agent carries
+      ``c = 0.5`` at every step (newcomers inherit ``mu``).
+    - ``mixed``: the not-swept file; every agent draws ``c ~ U(0, 1)`` at
+      init and at birth, so the population mean is 1/2 but the spread is the
+      point of the arm.
+    - ``sweep average``: all 11 cohorts of the swept file pooled. This is an
+      average over *populations*, not a cohort, and it drags in mu = 0 and
+      mu = 0.1 cohorts that never reach the 10 % threshold. It is the arm the
+      sketch's "2.6x faster" figure is measured against; it is kept here so
+      that claim can be shown rather than asserted.
+    """
+    rows: list[dict] = []
+    reach: dict[str, dict] = {}
+    for landscape, spec in M0_FILES.items():
+        swept = pd.read_csv(DATA / "figures_v1" / f"run_number{spec['swept']}.csv")
+        mixed = pd.read_csv(DATA / "figures_v1" / f"run_number{spec['mixed']}.csv")
+        # --- orientation and completeness, before any number is used --------
+        _require(len(mixed) == M0_REPEATS,
+                 f"{landscape} mixed arm: {len(mixed)} runs, expected {M0_REPEATS}")
+        _require(mixed["initial_curiosity"].nunique() == 1
+                 and float(mixed["initial_curiosity"].iloc[0]) == M0_HOMOG_MU,
+                 f"{landscape} mixed arm: initial_curiosity must be the single "
+                 f"value {M0_HOMOG_MU}, got "
+                 f"{sorted(mixed['initial_curiosity'].unique())[:4]}")
+        mu = swept["initial_curiosity"].round(2)
+        _require(mu.nunique() == 11,
+                 f"{landscape} swept arm: {mu.nunique()} mu levels, expected 11")
+        _require((mu.value_counts() == M0_REPEATS).all(),
+                 f"{landscape} swept arm: unequal repeats per mu: "
+                 f"{mu.value_counts().to_dict()}")
+        homog = swept[mu == M0_HOMOG_MU]
+        _require(len(homog) == M0_REPEATS,
+                 f"{landscape} homogeneous arm: {len(homog)} runs at mu=0.5")
+
+        arms = {
+            "mixed": mixed,
+            "homogeneous": homog,
+            "sweep average": swept,
+        }
+        for arm in M0_ARMS:
+            d = arms[arm]
+            for metric, series in (
+                ("h10_steps", d["harvested_10_step"]),
+                ("c_ideal", d["Mean_of_Corr_prestige_ideal_merit"]),
+                ("harvest_pct", d["percentage_knowledge_harvested"]),
+            ):
+                m, lo, hi, n = _m0_ci(series)
+                rows.append({"landscape": landscape, "arm": arm,
+                             "metric": metric, "value": m, "ci_lo": lo,
+                             "ci_hi": hi, "n": n})
+            if metric == "h10_steps":
+                reached = int((d["harvested_10_step"] < M0_NEVER).sum())
+                reach[f"{landscape}|{arm}"] = {"reached": reached, "n": len(d)}
+        # --- the sentinel is a sentinel, and it is ONE value ---------------
+        censored = swept["harvested_10_step"][swept["harvested_10_step"] >= M0_NEVER]
+        _require(censored.nunique() <= 1,
+                 f"{landscape}: censored harvested_10_step takes "
+                 f"{sorted(censored.unique())[:4]} -- expected the single "
+                 f"sentinel {M0_NEVER}")
+        reach[f"{landscape}|sweep average"] = {
+            "reached": int(len(swept) - len(censored)), "n": len(swept),
+            "censored": int(len(censored)),
+            "censored_at_mu": sorted(censored.index.map(
+                lambda i: float(swept.loc[i, "initial_curiosity"])).unique()),
+        }
+
+    tidy = pd.DataFrame(rows)
+    tidy = tidy[tidy["metric"].isin(["h10_steps", "c_ideal", "harvest_pct"])]
+    wide = tidy.pivot_table(index=["landscape", "metric"], columns="arm",
+                            values="value", observed=True)
+    caps: dict = {"reach": reach, "never_sentinel": M0_NEVER, "ratios": {},
+                  "deltas": {}, "harvest_gap_pp": {}}
+    for landscape in M0_FILES:
+        hom = float(wide.loc[(landscape, "h10_steps"), "homogeneous"])
+        mix = float(wide.loc[(landscape, "h10_steps"), "mixed"])
+        swp = float(wide.loc[(landscape, "h10_steps"), "sweep average"])
+        caps["ratios"][landscape] = {
+            "homog_over_mixed": hom / mix,
+            "sweep_over_mixed": swp / mix,
+            "homog_over_sweep": hom / swp,
+        }
+        c_hom = float(wide.loc[(landscape, "c_ideal"), "homogeneous"])
+        c_mix = float(wide.loc[(landscape, "c_ideal"), "mixed"])
+        caps["deltas"][landscape] = c_mix - c_hom
+        p_hom = float(wide.loc[(landscape, "harvest_pct"), "homogeneous"])
+        p_mix = float(wide.loc[(landscape, "harvest_pct"), "mixed"])
+        caps["harvest_gap_pp"][landscape] = 100.0 * (p_mix - p_hom)
+    caps["n_landscapes"] = len(M0_FILES)
+    caps["n_runs_mixed"] = M0_REPEATS * len(M0_FILES)
+    caps["n_runs_homog"] = M0_REPEATS * len(M0_FILES)
+    caps["n_runs_sweep"] = 11 * M0_REPEATS * len(M0_FILES)
+    # The verdict text is computed here, from the same numbers the figure
+    # draws, so a re-run cannot leave a stale claim on the panel.
+    r = caps["ratios"]
+    worst = max(abs(v["homog_over_mixed"] - 1.0) for v in r.values())
+    caps["speed_claim"] = (
+        "no acceleration" if worst < 0.15 else
+        (f"mixed up to {1 / min(v['homog_over_mixed'] for v in r.values()):.1f}x faster"
+         if all(v["homog_over_mixed"] >= 1.0 for v in r.values())
+         else f"mixed up to {max(v['homog_over_mixed'] for v in r.values()):.1f}x slower")
+    )
+    caps["align_better"] = sum(1 for v in caps["deltas"].values() if v > 0)
+    return tidy, caps
