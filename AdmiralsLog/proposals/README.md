@@ -12,7 +12,7 @@ behaviour spawns an ADR, which cites the proposal in `Spawned:`. Naming:
 
 | P | Topic | Class | Status | Assignee |
 | --- | --- | --- | --- | --- |
-| P-0001 | Phase-1 paper on the strength of waves 1-3: consolidate and proceed to drafting? (`output/reports/paper_phase1_v1.md`) | strategic | exercised (awaiting venue/framing ruling) | owner (ruling) |
+| P-0001 | Phase-1 paper synthesis (`drafts/paper_sketch_v1.md`, superseding `drafts/archive/paper_phase1_v1.md`) | strategic | exercised (awaiting venue/framing ruling) | owner (ruling) |
 | P-0007 | Sabbatical shocks $\times$ frontier paradigm refills: unlocking unclaimed frontier paradigms (Path C v2) | operative | open | owner (ruling) |
 | P-0008 | Path D v2: stock-level epistemic destruction and normalized superstar counterforce (`typology_v2`) | strategic | open | owner (ruling) |
 | P-0009 | Core demographic turnover promotion (`exit_mode`, `gap_recent`) and steady-state counterforce probe (`turnover_v2`) | operative | open | owner (ruling) |

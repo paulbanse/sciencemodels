@@ -9,14 +9,14 @@ status: exercised
 
 - **Status:** exercised
 - **Class:** strategic
-- **Date:** 2026-11-14 (proposed); 2026-11-15 (exercised in `output/reports/paper_phase1_v1.md`)
+- **Date:** 2026-11-14 (proposed); 2026-11-15 (exercised in `drafts/paper_sketch_v1.md`, superseding `drafts/archive/paper_phase1_v1.md`)
 - **Spark:** Five verified exploration rounds (waves 1-3) now support the
   Phase-1 claim of `AdmiralsLog/way_forward.md`; the owner ruled the dossier should
   live here as a proposal (2026-11-13).
 - **Outcome target:** a ruling on whether to proceed to paper drafting along
   the spine below, and on venue/authorship framing.
-- **Ruling:** exercised (initial Phase-1 draft delivered at `output/reports/paper_phase1_v1.md`; ready for Wave-4 integration from `CONT5` and venue selection)
-- **Spawned:** `output/reports/paper_phase1_v1.md` (initial Phase-1 draft landed 2026-11-14)
+- **Ruling:** exercised (integrated Waves 1–4 + legacy baseline paper sketch delivered at [drafts/paper_sketch_v1.md](file:///Users/joko/Git/sciencemodels/drafts/paper_sketch_v1.md), superseding [drafts/archive/paper_phase1_v1.md](file:///Users/joko/Git/sciencemodels/drafts/archive/paper_phase1_v1.md))
+- **Spawned:** [drafts/paper_sketch_v1.md](file:///Users/joko/Git/sciencemodels/drafts/paper_sketch_v1.md) (and archived [drafts/archive/paper_phase1_v1.md](file:///Users/joko/Git/sciencemodels/drafts/archive/paper_phase1_v1.md))
 
 ## The proposal
 
@@ -73,7 +73,7 @@ documented option for a later stage, not a commitment.
 ## Consequences if accepted
 
 A workplan for drafting is spawned (figures from `output/report_notebook_v1/`
-plus the re-measure results in `output/reports/paper_phase1_v1.md`; venue shortlist JEI / JASSS / Scientometrics per
+plus the integrated Waves 1–4 synthesis in [drafts/paper_sketch_v1.md](file:///Users/joko/Git/sciencemodels/drafts/paper_sketch_v1.md); venue shortlist JEI / JASSS / Scientometrics per
 `AdmiralsLog/way_forward.md`), and any behavioural commitment it makes spawns an
 ADR citing this proposal under `Spawned:`. This record binds nothing until
 ruled.

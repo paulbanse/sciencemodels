@@ -62,6 +62,7 @@ already decided.
 | `context/` | Background literature corpus with `FROZEN.md` | frozen, read-only (see Frozen Zones) |
 | `data/` | Run outputs (CSV), gitignored | generated |
 | `docs/` | Documentation and supplementary documents | live |
+| `drafts/` | Paper drafts and manuscript sketches (`drafts/archive/` holds superseded drafts) | live |
 | `output/reports/` | Round reports and generated outputs (owner directive 2026-11-14) | live |
 | `AdmiralsLog/` | Records: logs, decisions, bugs, ideas, unexplored, proposals, archive | live |
 | `AdmiralsLog/contributions/` | External contribution boundary (Franz, Paul, Niklas material) | live |

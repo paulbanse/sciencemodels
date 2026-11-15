@@ -9,7 +9,7 @@ project: "sciencemodels"
 - **Source:** Antigravity inspection & evaluation round (Item 2: Publishable Results & Visual Alignment), updated with Wave-4 refinements, contextual interpretations, and the `M0`/`M1`/`M2` + scale framework (`CONT6`, `CONT7`)
 - **Date:** 2026-11-14 (v1); 2026-11-15 (v3 — full contextual, scale, and model-tier integration)
 - **Related:** `AdmiralsLog/proposals/P-0001-phase1-paper.md`, `AdmiralsLog/contributions/CONT6-canonical-model-specifications-basic-vs-collaborators.md`, `AdmiralsLog/contributions/CONT7-legacy-notebooks-preliminary-findings.md`, `docs/related_publications.md`, `docs/connections_niklas.md`, `output/reports/sensitivity_map_v1.md`, `output/reports/career_flows_v1.md`, `output/reports/career_flows_noisy_v1.md`, `output/reports/welfare_probe_v1.md`, `output/reports/prestige_stock_v1.md`, `output/reports/turnover_v1.md`, `output/reports/interventions_v1.md`, `output/reports/path_b_probe_v2.md`
-- **Spawned:** Visual and analytical spine for `P-0001` (`output/reports/paper_phase1_v1.md`)
+- **Spawned:** Visual and analytical spine for `P-0001` ([drafts/paper_sketch_v1.md](file:///Users/joko/Git/sciencemodels/drafts/paper_sketch_v1.md), superseding [drafts/archive/paper_phase1_v1.md](file:///Users/joko/Git/sciencemodels/drafts/archive/paper_phase1_v1.md))
 
 # 1. How `CONT1`–`CONT7` Fit Together as a Complete Paper Dossier
 

@@ -25,6 +25,7 @@ proxy failure.
   gitignored. `data/legacy_2025_2026/` quarantines the loose pre-restructure
   CSVs (Nov 2025 - Jan 2026) with their own provenance note.
 - `output/reports/` - round reports (HR-docs with compiled PDFs).
+- `drafts/` - paper drafts and manuscript sketches (`drafts/paper_sketch_v1.md`, with superseded drafts in `drafts/archive/`).
 - `docs/` - long-standing conceptual documents; `AdmiralsLog/` - project
   records. `IDEA.md` is the orientation document; `AdmiralsLog/decisions/`
   is authoritative for anything already decided.

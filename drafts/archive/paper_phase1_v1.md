@@ -10,6 +10,8 @@ project: sciencemodels
 
 **Version 1** (November 2026)
 
+> **ARCHIVED (2026-11-15):** Moved from `output/reports/paper_phase1_v1.md` to `drafts/archive/paper_phase1_v1.md`. Superseded by [drafts/paper_sketch_v1.md](file:///Users/joko/Git/sciencemodels/drafts/paper_sketch_v1.md), which integrates Waves 1–4 and unifies `CONT1`–`CONT7` under the Three-Tier Model Specification (`M0`/`M1`/`M2`).
+
 > **STATUS: DRAFT, MODEL-INTERNAL. Calibration status: not calibrated** --
 > nothing in this paper is fitted to empirical data (owner ruling,
 > 2026-11-13). Every simulation number is recomputed from a run archive in
@@ -105,7 +107,7 @@ here. This paper reports waves 1-3 only.
 
 # Result 1: the relational wedge and its sensitivity map
 
-![F1: prestige stops tracking ideal merit once entry is on](../report_notebook_v1/F1_sensitivity_entry_curiosity.png)
+![F1: prestige stops tracking ideal merit once entry is on](../../output/report_notebook_v1/F1_sensitivity_entry_curiosity.png)
 
 **Figure 1.** Final correlation between prestige and ideal merit against the
 entry rate, post-audit arm. Source: `data/remeasure_v1/runs.csv`, 720 runs,
@@ -126,7 +128,7 @@ the failure is channel-specific -- prestige tracks quantity and fails to
 track quality -- which is exactly the shape of the empirical wedge in
 Section 1.
 
-![F5: the pairing audit moved ideal-side levels only](../report_notebook_v1/F5_pairing_audit_paired_delta.png)
+![F5: the pairing audit moved ideal-side levels only](../../output/report_notebook_v1/F5_pairing_audit_paired_delta.png)
 
 **Figure 2.** Mean paired delta (post-fix minus pre-fix) with 95% confidence
 intervals over 1,520 seed-matched runs, dodged by arm. Source:
@@ -151,13 +153,13 @@ vanishing factor, so it is excluded from the paired delta while the separate
 
 # Result 2: endogenous cumulative advantage and stock invariance
 
-![F2: the newcomer gap never closes, on either terrain](../report_notebook_v1/F2_career_flows_gap_ratio.png)
+![F2: the newcomer gap never closes, on either terrain](../../output/report_notebook_v1/F2_career_flows_gap_ratio.png)
 
 **Figure 3.** Newcomer-to-incumbent prestige gap ratio against the entry
 rate, by terrain and statistic. Source: `careerB_analysis.csv` and
 `noisyB_analysis.csv`, 9 cells x 20 seeds each, curiosity averaged.
 
-![F2b: slower entry decouples prestige from merit more strongly](../report_notebook_v1/F2b_career_flows_noisy_vs_clean.png)
+![F2b: slower entry decouples prestige from merit more strongly](../../output/report_notebook_v1/F2b_career_flows_noisy_vs_clean.png)
 
 **Figure 4.** Final prestige-ideal correlation against the entry rate, by
 terrain. Source: as Figure 3.
@@ -174,7 +176,7 @@ advisees arrive; a rapid influx dilutes the oligarchy. This qualifies the
 Matthew-effect literature (Merton 1968; Petersen et al. 2014): it is low
 turnover, not high prestige, that maximises epistemic misallocation.
 
-![F4: the terminal wedge barely moves with the prestige stock](../report_notebook_v1/F4_prestige_stock_wedge_matrix.png)
+![F4: the terminal wedge barely moves with the prestige stock](../../output/report_notebook_v1/F4_prestige_stock_wedge_matrix.png)
 
 **Figure 5.** Terminal wedge by entry-on cell and prestige stock. Source:
 `data/prestige_stock_v1/summary_cell.csv`, 36 cells x 20 seeds.
@@ -193,7 +195,7 @@ not repair proxy failure while recruitment stays prestige-proportional
 
 # Result 3: the epistemic welfare kink
 
-![F3: visibility pressure raises loss; the toggle barely matters](../report_notebook_v1/F3_welfare_loss_vs_visibility_weight.png)
+![F3: visibility pressure raises loss; the toggle barely matters](../../output/report_notebook_v1/F3_welfare_loss_vs_visibility_weight.png)
 
 **Figure 6.** Ideal-merit loss against the visibility weight, by entry and
 landscape legibility, means over the visibility toggle. Source:
