@@ -1,35 +1,31 @@
 ---
 title: "P-0004 - Endogenous paradigm refills: contrast incumbent hot-spot bailouts against frontier emergence (new_questions)"
 author: "Antigravity"
-date: "2026-11-14"
-tags: [proposal, operative, experiment, new-questions, paradigm-shifts, lock-in]
+date: "2026-11-15"
+tags: [proposal, operative, experiment, new-questions, paradigm-shifts, lock-in, exercised]
 project: "sciencemodels"
-status: open
+status: exercised
 ---
 
-- **Status:** open
+- **Status:** exercised
 - **Class:** operative
-- **Date:** 2026-11-14
+- **Date:** 2026-11-14 (proposed); 2026-11-15 (exercised in `output/reports/interventions_v1.md`)
 - **Spark:** `CONT1-depletion-counterforces-refills.md` (Section 4, Item 1.3); the `new_questions` lever was split from `knowledge_normalization` in Path 0 (`33421ff`) but pinned to `0` in every Wave 1–3 sweep.
 - **Outcome target:** a ruling on whether to probe the dormant `new_questions` channel under occupied vs. frontier refill rules.
-- **Ruling:** pending
-- **Spawned:** none
+- **Ruling:** exercised (2026-11-15, Arm C of `output/reports/interventions_v1.md`, 18 cells / 360 runs). `occupied` refills collapse exploration by 84% (`0.377 -> 0.061`) and widen the newcomer gap $11\times$ (`-0.451`), whereas `frontier` refills restore positive quality correlation under entry (`+0.078`) but accumulate unclaimed on the grid (`0.1895` vs. `0.0006` baseline).
+- **Spawned:** `output/reports/interventions_v1.md` (Result C), `P-0007`, `CONT1` (v2), `CONT5` (Section 4)
 
 ## The proposal
 
-Run an 18-cell probe comparing three epistemic regeneration regimes when tiles drop below the $0.025$ depletion threshold (`sciencemodels/model.py:342-349`):
+Run an 18-cell probe comparing three epistemic regeneration regimes when tiles drop below the $0.025$ depletion threshold (`sciencemodels/model.py:422-429`):
 1. `refill_mode = "off"` (`new_questions = False`, current baseline).
-2. `refill_mode = "occupied"` (`new_questions = True` as currently coded in `model.py:344`: only *occupied* depleted tiles refill to $U(0,1)$ — "incumbent hot-field bailout").
+2. `refill_mode = "occupied"` (`new_questions = True` as currently coded in `model.py`: only *occupied* depleted tiles refill to $U(0,1)$ — "incumbent hot-field bailout").
 3. `refill_mode = "frontier"` (when an occupied tile drops below $0.025$, the new question $U(0,1)$ spawns on a random *unoccupied* tile — "frontier paradigm emergence").
 
-## The stated reason
+## Exercise Summary (`output/reports/interventions_v1.md`, Result C)
 
-1. **Unexplored Path 0 lever:** Path 0 disentangled `new_questions` from `knowledge_normalization` specifically so refills could be varied independently (`docs/conceptual_degrees_of_freedom.md:105`), yet no sweep has tested `new_questions = True`.
-2. **Theoretical link to Neoclassical Lock-In (Dobusch & Kapeller 2009) and Hot-Field Bias (Ioannidis 2005):** The current code in `model.py:344` refills only tiles where scientists are already standing. Under high visibility pressure ($1-c$), herds that exhaust a tile receive an immediate exogenous knowledge refill right under their feet. Contrasting `"occupied"` against `"frontier"` tests when visibility-driven communities adapt to new paradigms versus when they remain locked into exhausted orthodoxy.
-
-## Experimental design & cost
-
-- **Grid:** 3 `refill_mode` (`off`, `occupied`, `frontier`) $\times$ 3 curiosities (`0.3`, `0.5`, `0.7`) $\times$ 2 entry rates (`0.0`, `0.1`) on `mgstd5` = 18 cells $\times$ 20 seeds = **360 runs** at $H = 200$ (~5 minutes at `n_jobs=3`).
-- **Implementation:** Driver-side subclass/wrapper overriding `_generate_new_questions`, with bit-identity verification for `off` and `occupied`.
-
-Do we proceed with the 18-cell `new_questions` paradigm-refill probe?
+- **Executed:** 18 cells $\times$ 20 seeds = 360 runs (`data/interventions_v1/cells/cellC_*`).
+- **Result:**
+  - `occupied` refills induce hard exploitation lock-in (`explored` drops $84\%$ from $0.377$ to $0.061$; newcomer gap widens $11\times$ to $-0.451$; $c_{\text{ideal}} = -0.045$).
+  - `frontier` refills are the only regime with positive quality alignment under entry ($c_{\text{ideal}} = +0.078$), but visibility-locked herds fail to migrate to the frontier (`mean_grid_knowledge` accumulates to $0.1895$ vs. $0.0006$ baseline while `explored` drops to $0.330$).
+  - **Follow-up spawned (`P-0007`):** Cross `frontier` refills with sabbatical relocation shocks (`p_reloc > 0`) under a supply-comparable refill rule to test whether mobility shocks unlock unclaimed frontier paradigms.

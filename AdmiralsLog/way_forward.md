@@ -1,13 +1,14 @@
 ---
 title: "Way Forward: Exploration Paths from the Proxy-Failure ABM to a Paper"
-version: 4.0
-date: 2026-11-14
+version: 5.0
+date: 2026-11-15
 revision-vehicle: strikethrough
 revision-renders: "md, pdf, html"
 tags: [way-forward, proxy-failure, collaborator-choice, abm, research-design]
 project: sciencemodels
 ---
 
+**Version 5** (November 2026)
 **Version 4** (November 2026)
 **Version 3** (November 2026)
 **Version 2** (November 2026)
@@ -269,16 +270,16 @@ the mechanism.
 
 # Next actions
 
-**Status as of 2026-11-14 (Version 4):** All four initial exploration actions below are **completed**, and the Phase-1 paper draft (`output/reports/paper_phase1_v1.md`) plus the Path B Gate 2 probe (`output/reports/path_b_probe_v1.md`, verdict `PARTIAL`: choice layer binds in 8/8 contrasts, production moments invariant without movement coupling) have landed. The active Phase 1.5 queue lives in `AdmiralsLog/contributions/CONT1..CONT3` and `AdmiralsLog/proposals/P-0001..P-0006`:
+**Status as of 2026-11-15 (Version 5):** All four initial exploration actions below and the four Wave-4 rounds (`F1`–`F4`: 198 cells / 3,960 runs across `output/reports/path_b_probe_v2.md`, `output/reports/interventions_v1.md`, `output/reports/typology_v1.md`, and `output/reports/turnover_v1.md`) are **completed**. Proposals `P-0001`–`P-0006` are `exercised`. The synthesized results live in `AdmiralsLog/contributions/CONT1..CONT5`, rejected mechanism hypotheses and active refinements in `AdmiralsLog/ideas/IE-0001..IE-0005`, strategic unexplored paths in `AdmiralsLog/unexplored/UE-0001..UE-0003`, and the next experimental queue in `AdmiralsLog/proposals/P-0007..P-0010`:
 
 - ~~Run the Path 0 hygiene pass and re-run one `bulk_runner` setup to confirm
   the reported correlations move as predicted (this doubles as the audit's
   validation).~~ *(Done: `33421ff`, `d3503ac`, `output/reports/remeasure_v1.md`.)*
 - ~~Prototype Path A on the existing sweep machinery with entry activated; the
-  first figure to look at is the wedge pair against the visibility weight.~~ *(Done: `output/reports/sensitivity_map_v1.md`, `career_flows_v1.md`, `career_flows_noisy_v1.md`, `prestige_stock_v1.md`, `welfare_probe_v1.md`, `notebooks/round_results_report_v1.ipynb`.)*
+  first figure to look at is the wedge pair against the visibility weight.~~ *(Done: `output/reports/sensitivity_map_v1.md`, `career_flows_v1.md`, `career_flows_noisy_v1.md`, `prestige_stock_v1.md`, `welfare_probe_v1.md`, `turnover_v1.md`, `notebooks/round_results_report_v1.ipynb`.)*
 - ~~Sketch the Path B decision rule on paper (one paragraph of pseudocode)
   before coding; the design trade-off (parsimony vs team moments) deserves a
-  decision, not an accident.~~ *(Done: `docs/path_b_dyadic_sketch_v1.md` and `output/reports/path_b_probe_v1.md`.)*
+  decision, not an accident.~~ *(Done: `AdmiralsLog/archive/path_b_dyadic_sketch_v1.md`, `output/reports/path_b_probe_v1.md`, and `output/reports/path_b_probe_v2.md`.)*
 - ~~Extract the moment menu into a machine-readable calibration spec (YAML) so
   every later run is scored against the same targets.~~ *(Done: `docs/calibration_moments.yaml`.)*
 
@@ -288,3 +289,4 @@ the mechanism.
 - **Version 2** (November 2026) --- Author clarification folded in: the collaborator bracket is deliberate sequencing, not a defect; Path 0 retitled measurement hygiene with entry activation moved to the front of Path B; added the sensitivity-map deliverable, the leaky-bracket caveat, and a Phase-1 paper skeleton.
 - **Version 3** (November 2026) --- Owner rulings folded: no calibration to empirical data at this point (Path A reframed as model-internal exploration of documented options); docs/ holds long-standing conceptual documents, plans move to the AdmiralsLog/ first level when a workplan supersedes them (this file is scheduled to move with the first workplan).
 - **Version 4** (November 2026) --- Relocated from `docs/way_forward.md` to `AdmiralsLog/way_forward.md` per owner directive (2026-11-14); pre-restructure `mesa_model.py` anchors and Markov C `0.70/0.05` figures updated via strikethrough; initial Next Actions marked completed with pointers to `output/reports/{remeasure_v1,path_b_probe_v1,paper_phase1_v1}.md`, `AdmiralsLog/contributions/CONT1..CONT3`, and `AdmiralsLog/proposals/P-0001..P-0006`.
+- **Version 5** (November 2026) --- Updated after Wave-4 execution rounds `F1`–`F4` (`output/reports/{path_b_probe_v2,interventions_v1,typology_v1,turnover_v1}.md`, 3,960 runs); marked `P-0001..P-0006` exercised and linked `CONT1..CONT5`, `P-0007..P-0010`, `IE-0001..IE-0005`, and `UE-0001..UE-0003`.

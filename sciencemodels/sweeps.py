@@ -24,11 +24,15 @@ arms, before and after).
 What stays out of this module on purpose: the arm-specific cell grids and
 aggregation. They differ by design (the noisy arm varies legibility, the clean
 arm varies demographics) and are not duplication.
+
+It also holds ``BULK_SETUPS``, the single source of truth for the 8-setup
+parametric design that ``scripts/bulk_runner.py`` and
+``scripts/figures/run_fresh_sweep.py`` run (section below).
 """
 from __future__ import annotations
 
 import traceback
-from typing import Any, Callable
+from typing import Any, Callable, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -67,6 +71,124 @@ CAREER_LANDSCAPES: dict[str, tuple[str, dict[str, Any]]] = {
     "mgstd5": ("multipleGaussians", {"std": 5, "number_gaussians": 2}),
     "noisypr5": ("noisyGaussian", {"prop_random": 5, "std": 5, "std_curiosity": 0.1}),
 }
+
+
+# ---------------------------------------------------------------------------
+# The 8-setup bulk design: one home for the parametric sweep's setup table
+# ---------------------------------------------------------------------------
+#
+# ``BULK_SETUPS`` is the single source of truth for the 8-setup design that
+# ``scripts/bulk_runner.py`` and ``scripts/figures/run_fresh_sweep.py`` run:
+# four landscape families, each in a swept-curiosity arm (even index, the
+# curiosity axis runs 0.0 .. 1.0) and a fixed-curiosity arm (odd index,
+# curiosity pinned at 0.5 with a uniform draw per newcomer). Both callers
+# import this table; they differ only in repeats and step limit, which they
+# pass in.
+
+
+class BulkSetup(NamedTuple):
+    """One row of the 8-setup bulk design.
+
+    ``cell_init`` is the *name* of the landscape generator in
+    :mod:`sciencemodels.landscapes`, not the function: importing this module
+    stays free of ``landscapes`` (and hence matplotlib). ``curiosity_swept``
+    says whether the setup sweeps ``initial_curiosity`` over
+    :data:`BULK_CURIOSITY_SWEEP` (newcomers take the swept value unchanged) or
+    fixes it at :data:`BULK_CURIOSITY_FIXED` (newcomers draw uniformly).
+    """
+
+    index: int
+    family: str
+    cell_init: str
+    generation_params: dict[str, Any]
+    curiosity_swept: bool
+
+
+#: Curiosity axis of the swept setups: 11 values, 0.0 .. 1.0 in steps of 0.1.
+#: A list, not a tuple: the production grid reads list-valued entries as axes.
+BULK_CURIOSITY_SWEEP: list[float] = [k / 10 for k in range(11)]
+
+#: Curiosity value of the fixed setups; newcomers draw uniformly around it.
+BULK_CURIOSITY_FIXED: float = 0.5
+
+#: The 8 setups in index order, so ``BULK_SETUPS[k].index == k``.
+BULK_SETUPS: tuple[BulkSetup, ...] = (
+    BulkSetup(0, "randominit", "randominit", {}, True),
+    BulkSetup(1, "randominit", "randominit", {}, False),
+    BulkSetup(
+        2, "MultG2", "multipleGaussians", {"std": 5, "number_gaussians": 2}, True
+    ),
+    BulkSetup(
+        3, "MultG2", "multipleGaussians", {"std": 5, "number_gaussians": 2}, False
+    ),
+    BulkSetup(
+        4, "MultG6", "multipleGaussians", {"std": 5, "number_gaussians": 6}, True
+    ),
+    BulkSetup(
+        5, "MultG6", "multipleGaussians", {"std": 5, "number_gaussians": 6}, False
+    ),
+    BulkSetup(
+        6,
+        "Noisy2",
+        "noisyGaussian",
+        {"prop_random": 5, "std": 5, "std_curiosity": 0.1},
+        True,
+    ),
+    BulkSetup(
+        7,
+        "Noisy2",
+        "noisyGaussian",
+        {"prop_random": 5, "std": 5, "std_curiosity": 0.1},
+        False,
+    ),
+)
+
+
+def bulk_setup(index: int) -> BulkSetup:
+    """The record for setup ``index``, with the index range checked."""
+    if not 0 <= index < len(BULK_SETUPS):
+        raise IndexError(f"no bulk setup {index}: the design has {len(BULK_SETUPS)}")
+    return BULK_SETUPS[index]
+
+
+def bulk_param_grid(setup: BulkSetup, step_limit: int = 400) -> dict[str, Any]:
+    """The ``param_grid`` dict for one bulk setup, keys in the inherited order.
+
+    ``step_limit`` is the one knob the two callers set differently
+    (``scripts/bulk_runner.py`` runs 400 steps, the figures-v1 sweep 200);
+    every other entry comes from the setup record.
+    """
+    from sciencemodels import landscapes  # deferred: landscapes imports matplotlib
+
+    generation_function = getattr(landscapes, setup.cell_init)
+    curiosities: list[float] | float
+    if setup.curiosity_swept:
+        curiosities = list(BULK_CURIOSITY_SWEEP)
+        # Identity: the swept mu is the newcomer's curiosity unchanged.
+        agent_generation_function = lambda cur, _rng, _params: cur
+    else:
+        curiosities = BULK_CURIOSITY_FIXED
+        agent_generation_function = landscapes.uniform
+
+    return {
+        "n_agents": 20,  # minimum 3
+        "initial_curiosity": curiosities,  # interest for exploration
+        "use_distance": True,  # if True, agents take into account distance when choosing where to go
+        "epsilon": 0.1,  # noise in the measure of utility
+        "harvest": 0.02,  # proportion of science harvested at each iteration
+        "grid_size": 20,
+        "cell_init_function": generation_function,  # generation method for the landscape, see landscapes for the definitions
+        "generation_params": dict(setup.generation_params),  # parameters for the generation method
+        "agent_generation_time": 0,  # number of agent generated per generation, for example if 0.1, 10 new agent per generation
+        "new_questions": 0,
+        "agent_seed": 1,  # seed for the random of the agents
+        "step_limit": step_limit,
+        "agent_generation_function": agent_generation_function,  # if this is not defined the function is just mu
+        "vanishing_factor_for_prestige": 0.9,
+        "use_visibility_reward": True,
+        "knowledge_normalization": "share",  # explicit pin so runs are self-describing
+        "prestige_accrual": "harvested",  # explicit pin so runs are self-describing
+    }
 
 
 def career_measures_from_agent_vars(av: pd.DataFrame, model_vars: pd.DataFrame) -> pd.DataFrame:

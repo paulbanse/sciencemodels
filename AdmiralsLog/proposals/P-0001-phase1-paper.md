@@ -4,18 +4,18 @@ author: "Hermes Agent"
 date: "2026-11-14"
 tags: [proposal, strategic, paper, proxy-failure, phase-1]
 project: "sciencemodels"
-status: open
+status: exercised
 ---
 
-- **Status:** open
+- **Status:** exercised
 - **Class:** strategic
-- **Date:** 2026-11-14
+- **Date:** 2026-11-14 (proposed); 2026-11-15 (exercised in `output/reports/paper_phase1_v1.md`)
 - **Spark:** Five verified exploration rounds (waves 1-3) now support the
   Phase-1 claim of `AdmiralsLog/way_forward.md`; the owner ruled the dossier should
   live here as a proposal (2026-11-13).
 - **Outcome target:** a ruling on whether to proceed to paper drafting along
   the spine below, and on venue/authorship framing.
-- **Ruling:** pending
+- **Ruling:** exercised (initial Phase-1 draft delivered at `output/reports/paper_phase1_v1.md`; ready for Wave-4 integration from `CONT5` and venue selection)
 - **Spawned:** `output/reports/paper_phase1_v1.md` (initial Phase-1 draft landed 2026-11-14)
 
 ## The proposal

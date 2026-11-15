@@ -1,6 +1,6 @@
 ---
 title: "Proxy Failure in the Epistemic Marketplace: A Literature Review of Agent-Based Models of Science, Metric Gaming, and Collaborator Choice"
-version: 2.0
+version: 2.1
 date: 2026-11-14
 project: sciencemodels
 tags:
@@ -19,6 +19,7 @@ revision-vehicle: strikethrough
 revision-renders: "md, pdf, html"
 ---
 
+**Version 2.1** (November 2026)
 **Version 2** (November 2026)
 **Version 1** (November 2026)
 
@@ -438,7 +439,7 @@ mismatch stated.
 | Squazzoni and Gandelli (2013) | A referee actor --- absent from the model; the natural home is a Path B extension once credit sharing is explicit | Path B | absent |
 | Bianchi, Grimaldo, Bravo and Squazzoni (2018) | Destruction channel $\gamma$: crowding noise $\epsilon_{\text{eff}} = \epsilon \cdot m^{\gamma}$ with $m$ agents on a tile; their non-monotone competition result is the shape $\kappa$ should produce | Path D, `P-0005` | proposed ($\gamma, \kappa \in \{0, 1\}$) |
 | Squazzoni, Bravo and Takács (2013) | The reward-for-proxy test in its simplest form: what the visibility weight does to $\mathrm{corr}(\text{prestige}, \text{ideal merit})$ | Path A / C | measured --- the existing wedge and its sensitivity map |
-| Bala and Goyal (2000) | Path B link utility with a tie cost and a decay of partner value with distance; $\lambda$ mixes proxy and goal components | Path B, `docs/path_b_dyadic_sketch_v1.md` | $\lambda$ specified in the sketch; cost and decay not implemented |
+| Bala and Goyal (2000) | Path B link utility with a tie cost and a decay of partner value with distance; $\lambda$ mixes proxy and goal components | Path B, `output/reports/path_b_probe_v1.md` (menu archived at `AdmiralsLog/archive/path_b_dyadic_sketch_v1.md`) | $\lambda$ specified in the archived menu and implemented in the Gate 2 sweep; cost and decay not implemented |
 | Jackson and Rogers (2007) | Two-channel meeting process (random and friend-of-friend), making team concentration a property of the process rather than a free knob; hosts Q5's proposal regimes | Path B | proposed |
 | Dobusch and Kapeller (2009) | The prestige / visibility split itself; stationary-cluster lock-in as the macro counterpart of the wedge | Path A | measured (oscillating clusters, 16/18 conjunctive cells) |
 | Dobusch and Kapeller (2012) | The intervention space --- de-targeting the evaluation proxy --- and multi-tradition landscapes as several labelled peaks | Path C; Path D | partially (`P-0003`) |
@@ -457,7 +458,8 @@ Notes on the parameter names in the brief:
   `prestige`, `prestige_vanishing`, `prestige_visibility`; the audit of which
   stock drives the supervisor channel is `output/reports/prestige_stock_v1.md`.
 - $\lambda$ is the Path B mixing parameter
-  (`docs/path_b_dyadic_sketch_v1.md`), $\gamma$ and $\kappa$ are the Path D
+  (`output/reports/path_b_probe_v1.md`, which implements the menu archived at
+  `AdmiralsLog/archive/path_b_dyadic_sketch_v1.md`), $\gamma$ and $\kappa$ are the Path D
   extensions specified in `P-0005`, and the lottery exponent $\alpha$ is
   `P-0003`.
 - **`tau` does not exist** in the code, the sketch or any proposal. The two
@@ -495,3 +497,4 @@ In short, the literature supplies the pieces --- landscapes, incentive selection
 
 - **Version 1** (November 2026) --- Initial literature review, 34 verified studies in three clusters, every record checked against publisher or bibliographic-database data; master table; gap analysis and the niche claim.
 - **Version 2** (November 2026) --- Added the project's own four foundations as a dedicated section with "Link to our ABM" bullets (Dobusch--Kapeller 2009 and 2012, Kapeller--Steinerberger 2016, Kapeller--Paul--Braganza 2026, the last cross-referenced to `AdmiralsLog/contributions/CONT2-hunting-proxy-patterns-formalization.md` and `P-0005`). Added eight studies that the v2 brief identified as gaps: Strevens (2003), Avin (2015) and (2019), Squazzoni--Gandelli (2013), Bianchi--Grimaldo--Bravo--Squazzoni (2018), Squazzoni--Bravo--Takács (2013), Bala--Goyal (2000), Jackson--Rogers (2007); master table extended to 46 rows with a new cluster D. Added the mapping section that ties every added study to a model object, an experiment or a premise, and states which brief-named parameters do not exist (`tau`). Two handed-over citations corrected against Crossref: the Squazzoni--Bravo--Takács study is a *Research Policy* experiment, not a JASSS ABM, and Avin's simulation is the 2015 EPSA13 chapter, not the 2018/2019 article. Three gap bullets added (lotteries, Strevens' defence of prestige allocation, network formation) and the niche claim restated against the new evidence.
+- **Version 2.1** (15 November 2026) --- Errata pass: the Path B design menu left `docs/` and is archived at `AdmiralsLog/archive/path_b_dyadic_sketch_v1.md` (source and PDF together) once its probe landed. The Bala--Goyal row and the lambda note now cite `output/reports/path_b_probe_v1.md`, the executed Gate 2 sweep, alongside the archived menu, and the Bala--Goyal status reads that lambda is implemented in that sweep rather than only specified. No study, table row or claim changed.

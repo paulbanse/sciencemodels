@@ -8,6 +8,13 @@ tags: [path-b, dyadic, collaborator-choice, homophily, credit-sharing, design-me
 project: sciencemodels
 ---
 
+> **ARCHIVED 2026-11-15.** The design menu this document specifies was executed
+> and the probe result now lives in `output/reports/path_b_probe_v1.md`. The
+> owner-only decisions Q1-Q11 were ruled and are recorded there: Q1-Q8 landed
+> as the implemented pins and sweep axes, while Q9 (the identity of $AP_F$)
+> stays deferred to Path D and Q10-Q11 are answered by that report's
+> deferred-need and no-calibration statements.
+
 **Version 1** (November 2026)
 
 > **DESIGN MENU, NOT A PLAN.** No code was written and no run was made for

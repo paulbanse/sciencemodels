@@ -12,9 +12,9 @@ ruled out (`decisions/rejected/`, `bugs/deadends/`), what was fixed
 
 | Document | Purpose | Status | Supersedes |
 | --- | --- | --- | --- |
-| `way_forward.md` | Exploration paths from the proxy-failure ABM to a paper (relocated from `docs/` 2026-11-14 per owner ruling) | live | - |
+| `way_forward.md` | Exploration paths from the proxy-failure ABM to a paper (v5.0, updated post-Wave-4 `F1`–`F4`) | live | - |
 | `HANDOVER-2026-11-14.md` | Self-contained project state, evidence ledger, immediate next steps, and open decisions (`Q1`–`Q11`, `P-0001`) | live | - |
 
 ## Register counters
 
-Next ids: ADR-0003, BUG-0006, CONT4, DE-0001, IE-0001, UE-0001, P-0007.
+Next ids: ADR-0003, BUG-0006, CONT6, DE-0001, IE-0006, UE-0004, P-0011.

@@ -15,9 +15,9 @@ expectation, so a timeout loses at most one setup and never mixes partial rows
 into a finished file. A setup whose final file already holds the expected rows
 is skipped.
 
-The setup table here duplicates ``scripts/bulk_runner.py`` (the legacy runner is
-a script, not an importable module: it launches its own sweep at import). Any
-parameter change belongs in both places until that duplication is resolved.
+The setup table is not carried here: it is ``sciencemodels.sweeps.BULK_SETUPS``,
+imported, and shared with ``scripts/bulk_runner.py`` (ADR-0002: one home per
+parameter setup). This driver adds only its own repeats and step limit.
 
 Run from anywhere:
 
@@ -35,55 +35,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspa
 
 from joblib import Parallel, delayed
 
-from sciencemodels import landscapes
 from sciencemodels.model import generate_data_parametric_exploration
+from sciencemodels.sweeps import BULK_SETUPS, bulk_param_grid, bulk_setup
 
 OUT_DIR = "data/figures_v1"
 REPEATS = 10
 STEP_LIMIT = 200
 N_JOBS = 3
 
-# ---- setup design, verbatim from scripts/bulk_runner.py -------------------
-SETUPS = {
-    0: ("randominit", landscapes.randominit, {}),
-    1: ("randominit", landscapes.randominit, {}),
-    2: ("MultG2", landscapes.multipleGaussians, {"std": 5, "number_gaussians": 2}),
-    3: ("MultG2", landscapes.multipleGaussians, {"std": 5, "number_gaussians": 2}),
-    4: ("MultG6", landscapes.multipleGaussians, {"std": 5, "number_gaussians": 6}),
-    5: ("MultG6", landscapes.multipleGaussians, {"std": 5, "number_gaussians": 6}),
-    6: ("Noisy2", landscapes.noisyGaussian, {"prop_random": 5, "std": 5, "std_curiosity": 0.1}),
-    7: ("Noisy2", landscapes.noisyGaussian, {"prop_random": 5, "std": 5, "std_curiosity": 0.1}),
-}
-
 
 def param_grid(chosen_setup):
-    """The bulk_runner parameter dict for one setup, with the figures-v1 step limit."""
-    _, generation_function, generation_params = SETUPS[chosen_setup]
-    if chosen_setup % 2 == 0:  # curiosity market swept 0.0 .. 1.0
-        curiosities = [k / 10 for k in range(11)]
-        agent_generation_function = lambda cur, _rng, _params: cur
-    else:  # fixed curiosity, uniform draw per newcomer
-        curiosities = 0.5
-        agent_generation_function = landscapes.uniform
-    return {
-        "n_agents": 20,
-        "initial_curiosity": curiosities,
-        "use_distance": True,
-        "epsilon": 0.1,
-        "harvest": 0.02,
-        "grid_size": 20,
-        "cell_init_function": generation_function,
-        "generation_params": generation_params,
-        "agent_generation_time": 0,
-        "new_questions": 0,
-        "agent_seed": 1,
-        "step_limit": STEP_LIMIT,
-        "agent_generation_function": agent_generation_function,
-        "vanishing_factor_for_prestige": 0.9,
-        "use_visibility_reward": True,
-        "knowledge_normalization": "share",
-        "prestige_accrual": "harvested",
-    }
+    """The shared bulk parameter dict for one setup, with the figures-v1 step limit."""
+    return bulk_param_grid(bulk_setup(chosen_setup), step_limit=STEP_LIMIT)
 
 
 def n_param_sets(grid):
@@ -115,7 +78,7 @@ def run_setup(chosen_setup):
     tmp = tmp_prefix + ".csv"
     expected = gross_runs(chosen_setup)
     if completed_rows(final) == expected:
-        return {"setup": chosen_setup, "family": SETUPS[chosen_setup][0],
+        return {"setup": chosen_setup, "family": bulk_setup(chosen_setup).family,
                 "status": "skipped-complete", "gross": expected,
                 "net": completed_rows(final), "seconds": 0.0}
     if os.path.exists(tmp):
@@ -136,7 +99,7 @@ def run_setup(chosen_setup):
             f"setup {chosen_setup}: wrote {net} rows, expected {expected}"
         )
     os.replace(tmp, final)
-    return {"setup": chosen_setup, "family": SETUPS[chosen_setup][0],
+    return {"setup": chosen_setup, "family": bulk_setup(chosen_setup).family,
             "status": "run", "gross": expected, "net": net,
             "seconds": round(time.time() - t0, 1)}
 
@@ -144,7 +107,7 @@ def run_setup(chosen_setup):
 def main():
     os.makedirs(f"{OUT_DIR}/figures", exist_ok=True)
     results = Parallel(n_jobs=N_JOBS, return_as="list")(
-        delayed(run_setup)(k) for k in range(8)
+        delayed(run_setup)(k) for k in range(len(BULK_SETUPS))
     )
     manifest = {
         "generated": time.strftime("%Y-%m-%dT%H:%M:%S"),
