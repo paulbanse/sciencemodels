@@ -223,7 +223,69 @@ def micro_points() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-# ------------------------------------------------------------------- styling
+def wedge_points() -> pd.DataFrame:
+    """Terminal relational wedge (corr(prest,local) - corr(prest, ideal)) per xi."""
+    rows = []
+    w = pd.read_csv(REPO / "data/remeasure_v1/w_v05_summary.csv")
+    sel = w[(w.landscape == "mgstd5") & (w.use_visibility_reward == True)]  # noqa: E712
+    names = {0.0: "M0 Closed Cohort", 0.1: "M1 Vertical Lineage"}
+    for _, r in sel.iterrows():
+        rows.append(dict(
+            panel="C", series=names[float(r.agent_generation_time)],
+            c=float(r.curiosity), xi=1.0 - float(r.curiosity),
+            value=float(r.wedge_local_minus_ideal_fin), sd=np.nan, n=int(r.n_seeds),
+            metric="relational wedge (c_local - c_ideal), final step",
+            source_file="data/remeasure_v1/w_v05_summary.csv"))
+    for c, d in _turnover_cells().groupby("curiosity"):
+        w_vals = d.c_local_fin - d.c_ideal_fin
+        rows.append(dict(
+            panel="C", series="M1 + Turnover (age_hazard)",
+            c=float(c), xi=1.0 - float(c),
+            value=float(w_vals.mean()), sd=float(w_vals.std()),
+            n=int(len(d)), metric="relational wedge (c_local - c_ideal), final step",
+            source_file=" + ".join(sorted(d.source_file.unique()))))
+    m2 = _m2_cells()
+    for lam, tag in ((0.0, "M2 (lambda=0)"), (1.0, "M2 (lambda=1)")):
+        for c, d in m2[m2.dyadic_lambda == lam].groupby("curiosity"):
+            w_vals = d.Mean_of_Corr_prestige_local_merit - d.Mean_of_Corr_prestige_ideal_merit
+            rows.append(dict(
+                panel="C", series=tag, c=float(c), xi=1.0 - float(c),
+                value=float(w_vals.mean()), sd=float(w_vals.std()), n=int(len(d)),
+                metric="relational wedge (c_local - c_ideal), final step",
+                source_file=" + ".join(sorted(d.source_file.unique()))))
+    return pd.DataFrame(rows)
+
+
+def top10_points() -> pd.DataFrame:
+    """Terminal top-10% prestige share per xi."""
+    rows = []
+    w = pd.read_csv(REPO / "data/remeasure_v1/w_v05_summary.csv")
+    sel = w[(w.landscape == "mgstd5") & (w.use_visibility_reward == True)]  # noqa: E712
+    names = {0.0: "M0 Closed Cohort", 0.1: "M1 Vertical Lineage"}
+    for _, r in sel.iterrows():
+        rows.append(dict(
+            panel="D", series=names[float(r.agent_generation_time)],
+            c=float(r.curiosity), xi=1.0 - float(r.curiosity),
+            value=float(r.top10_fin), sd=np.nan, n=int(r.n_seeds),
+            metric="top-10% prestige share (terminal)",
+            source_file="data/remeasure_v1/w_v05_summary.csv"))
+    for c, d in _turnover_cells().groupby("curiosity"):
+        rows.append(dict(
+            panel="D", series="M1 + Turnover (age_hazard)",
+            c=float(c), xi=1.0 - float(c),
+            value=float(d.top10_fin.mean()), sd=float(d.top10_fin.std()),
+            n=int(len(d)), metric="top-10% prestige share (terminal)",
+            source_file=" + ".join(sorted(d.source_file.unique()))))
+    m2 = _m2_cells()
+    for lam, tag in ((0.0, "M2 (lambda=0)"), (1.0, "M2 (lambda=1)")):
+        for c, d in m2[m2.dyadic_lambda == lam].groupby("curiosity"):
+            rows.append(dict(
+                panel="D", series=tag, c=float(c), xi=1.0 - float(c),
+                value=float(d.top10pct_prestige_share.mean()),
+                sd=float(d.top10pct_prestige_share.std()), n=int(len(d)),
+                metric="top-10% prestige share (terminal)",
+                source_file=" + ".join(sorted(d.source_file.unique()))))
+    return pd.DataFrame(rows)
 def _bands(ax) -> None:
     """Shared two-stage bands: Stage 1, welfare-kink band, Stage 2."""
     ax.axvspan(0.3, 0.6, color=PALETTE["gray_light"], alpha=0.18, zorder=0)
@@ -307,7 +369,8 @@ def _footnote(macro: pd.DataFrame, micro: pd.DataFrame) -> str:
 
 
 # -------------------------------------------------------------------- figure
-def build_f6(macro: pd.DataFrame, micro: pd.DataFrame) -> dict:
+def build_f6(macro: pd.DataFrame, micro: pd.DataFrame,
+             wedge: pd.DataFrame, top10: pd.DataFrame) -> dict:
     def left(ax):
         _bands(ax)
         _plot_series(ax, macro, ("MultG2", "MultG6", "M1 lineage",
@@ -316,7 +379,7 @@ def build_f6(macro: pd.DataFrame, micro: pd.DataFrame) -> dict:
         ax.set_ylim(0, float(macro.value.max()) * 1.18)
         ax.set_xlim(0, 1)
         _cosmetics(ax, HOUSE_STYLE, "",
-                   "visibility weight  $\\xi = 1 - c$",
+                   "",
                    "harvested knowledge share")
 
     def right(ax):
@@ -333,36 +396,63 @@ def build_f6(macro: pd.DataFrame, micro: pd.DataFrame) -> dict:
         ax.set_ylim(lo - 0.12 * span, hi + 0.12 * span)
         ax.set_xlim(0, 1)
         _cosmetics(ax, HOUSE_STYLE, "",
-                   "visibility weight  $\\xi = 1 - c$",
+                   "",
                    "Corr(prestige, ideal merit)")
 
+    def panel_c(ax):
+        _bands(ax)
+        ax.axhline(0, color=PALETTE["gray"], lw=1.0, zorder=2)
+        ax.text(0.01, 0, "0", transform=ax.get_yaxis_transform(),
+                fontsize=HOUSE_STYLE["tick_size"], color=PALETTE["gray"],
+                va="bottom")
+        _plot_series(ax, wedge, ("M0 Closed Cohort", "M1 Vertical Lineage",
+                                 "M1 + Turnover (age_hazard)",
+                                 "M2 (lambda=0)", "M2 (lambda=1)"))
+        lo, hi = float(wedge.value.min()), float(wedge.value.max())
+        span = hi - lo
+        ax.set_ylim(lo - 0.14 * span, hi + 0.14 * span)
+        ax.set_xlim(0, 1)
+        _cosmetics(ax, HOUSE_STYLE, "",
+                   "visibility weight  $\\xi = 1 - c$",
+                   "relational wedge (c_local - c_ideal)")
+
+    def panel_d(ax):
+        _bands(ax)
+        ax.axhline(0.10, color=PALETTE["gray"], lw=0.9, ls=":", zorder=2)
+        ax.text(0.01, 0.10, "0.10 equality", transform=ax.get_yaxis_transform(),
+                fontsize=HOUSE_STYLE["tick_size"] - 1.5, color=PALETTE["gray"],
+                va="bottom")
+        _plot_series(ax, top10, ("M0 Closed Cohort", "M1 Vertical Lineage",
+                                 "M1 + Turnover (age_hazard)",
+                                 "M2 (lambda=0)", "M2 (lambda=1)"))
+        ax.set_ylim(0.05, float(top10.value.max()) * 1.15)
+        ax.set_xlim(0, 1)
+        _cosmetics(ax, HOUSE_STYLE, "",
+                   "visibility weight  $\\xi = 1 - c$",
+                   "top-10% prestige share")
+
     fig, axes = dt.styled_panel(
-        [left, right], nrows=1, ncols=2,
-        titles=["(a) Macro efficiency", "(b) Micro signal alignment"],
-        figsize=(7.5, 4.05))
+        [left, right, panel_c, panel_d], nrows=2, ncols=2,
+        titles=["(a) Macro efficiency", "(b) Micro signal alignment",
+                "(c) Relational wedge", "(d) Elite concentration (top 10%)"],
+        figsize=(8.0, 6.3))
     note = _footnote(macro, micro)
-    nlines = note.count("\n") + 1
-    # Explicit layout, not tight_layout: an anchored legend is invisible to
-    # tight_layout, which then reserves the legend band a second time and
-    # squashes both panels into a strip. The bands are fixed here and measured
-    # back off the rendered PNG (axes 0.60-0.90, axis text 0.52-0.59,
-    # legends 0.36-0.48, footnote below 0.30).
-    fig.subplots_adjust(left=0.085, right=0.985, top=0.90, bottom=0.635,
-                        wspace=0.26)
-    flat = np.atleast_1d(axes).ravel()   # styled_panel returns an ndarray
-    for ax, x0 in zip(flat, (0.005, 0.495)):
-        h, lb = ax.get_legend_handles_labels()
-        fig.legend(h, lb, loc="upper left", bbox_to_anchor=(x0, 0.47),
-                   ncol=2, frameon=False,
-                   fontsize=HOUSE_STYLE["tick_size"] - 2.5, handlelength=1.7,
-                   columnspacing=1.4, labelspacing=0.3)
-    fig.text(0.01, 0.325, note, fontsize=HOUSE_STYLE["note_size"],
-             color=PALETTE["gray"], va="top")
+    fig.subplots_adjust(left=0.09, right=0.985, top=0.94, bottom=0.295,
+                        hspace=0.26, wspace=0.26)
+    flat = np.atleast_1d(axes).ravel()
+    h_a, lb_a = flat[0].get_legend_handles_labels()
+    fig.legend(h_a, lb_a,
+               loc="upper center", bbox_to_anchor=(0.53, 0.215),
+               ncol=3, frameon=False,
+               fontsize=HOUSE_STYLE["tick_size"] - 1.5, handlelength=1.7,
+               columnspacing=1.6, labelspacing=0.35)
+    fig.text(0.01, 0.015, note, fontsize=HOUSE_STYLE["note_size"],
+             color=PALETTE["gray"], va="bottom")
     fig.savefig(OUT_PNG, dpi=HOUSE_STYLE["dpi"])
     fig.savefig(OUT_PNG.with_suffix(".pdf"))  # vector text for venue editing
     plt.close(fig)
     csv = write_figure_data(
-        pd.concat([macro, micro], ignore_index=True), OUT_PNG)
+        pd.concat([macro, micro, wedge, top10], ignore_index=True), OUT_PNG)
     return {"name": "F6_two_stage_proxy_failure",
             "paths": [str(OUT_PNG), str(OUT_PNG.with_suffix(".pdf")), str(csv)],
             "sources": sorted(set(
@@ -370,14 +460,14 @@ def build_f6(macro: pd.DataFrame, micro: pd.DataFrame) -> dict:
 
 
 def main() -> None:
-    macro, micro = macro_points(), micro_points()
-    rep = build_f6(macro, micro)
+    macro, micro, wedge, top10 = macro_points(), micro_points(), wedge_points(), top10_points()
+    rep = build_f6(macro, micro, wedge, top10)
     for p in rep["paths"]:
         kb = Path(p).stat().st_size / 1024
         print(f"{Path(p).name}: {kb:.1f} kB")
     for s in rep["sources"]:
         print(f"source: {s}")
-    print(f"plotted rows: macro {len(macro)}, micro {len(micro)}")
+    print(f"plotted rows: macro {len(macro)}, micro {len(micro)}, wedge {len(wedge)}, top10 {len(top10)}")
     for name, d in (("macro", macro), ("micro", micro)):
         cov = d.groupby("series").xi.apply(lambda s: len(set(np.round(s, 2)))).to_dict()
         print(f"  xi points per series ({name}): {cov}")
