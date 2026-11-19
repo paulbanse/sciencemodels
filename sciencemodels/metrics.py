@@ -109,7 +109,7 @@ def update_ideal_merit(model):
 
 # ---------------------------------------------------------------------------
 # Path B: the dyadic collaborator-choice layer (design menu
-# docs/path_b_dyadic_sketch_v1.md; owner rulings Q1-Q8 in the Path B brief).
+# AdmiralsLog/archive/path_b_dyadic_sketch_v1.md; owner rulings Q1-Q8 in the Path B brief).
 # compute_dyadic_scores and compute_teams are measures; dyadic_step mutates
 # model.links (the declared choice layer) and is driven from
 # MyModel.end_loop_update. Everything here is guarded: with
@@ -199,7 +199,7 @@ def _dyadic_bars(model, U, ids, index):
 
 
 def dyadic_step(model):
-    """One dyadic round (pseudocode: docs/path_b_dyadic_sketch_v1.md).
+    """One dyadic round (pseudocode: AdmiralsLog/archive/path_b_dyadic_sketch_v1.md).
 
     Proposers (per the regime) score all candidates, form or upgrade links
     under bilateral relative-bar clearance, then strictly weaker ties
@@ -307,10 +307,10 @@ def compute_teams(model):
 
 def correlation_reporter(merit_type, prestige_type):
     def reporter(m):
-        Prest = [getattr(a, prestige_type) for a in m.agents]
-        Mert = [getattr(a, merit_type) for a in m.agents]
-        if  np.std(Prest) > 0 and np.std(Mert) > 0:
-            return np.corrcoef(Prest,Mert)[0, 1]
+        # BUG-0006: exclude unscored step-t newborns (non-finite ideal_Merit)
+        Prest, Mert = _finite_pair_vectors(m, prestige_type, merit_type)
+        if len(Prest) >= 2 and np.std(Prest) > 0 and np.std(Mert) > 0:
+            return np.corrcoef(Prest, Mert)[0, 1]
         else:
             return 0
     return reporter
@@ -335,3 +335,19 @@ def update_step_goals(model) -> None:
             and getattr(model, metric_attr) >= threshold
         ):
             setattr(model, step_attr, steps)
+
+
+def _finite_pair_vectors(model, prestige_type, merit_type):
+    """Extract matched finite (prestige, merit) vectors for correlation_reporter.
+
+    Excludes agents whose merit is non-finite (e.g. newborns spawned on the
+    current step after ``update_ideal_merit`` already ran — BUG-0006).
+    """
+    prest, mert = [], []
+    for a in model.agents:
+        p = float(getattr(a, prestige_type))
+        mt = float(getattr(a, merit_type))
+        if np.isfinite(p) and np.isfinite(mt):
+            prest.append(p)
+            mert.append(mt)
+    return prest, mert

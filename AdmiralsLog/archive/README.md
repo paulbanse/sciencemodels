@@ -6,4 +6,4 @@ root) is authoritative.
 
 | Document | Superseded by | Date |
 | --- | --- | --- |
-| (none yet) | - | - |
+| `path_b_dyadic_sketch_v1.md` | `output/reports/path_b_probe_v1.md`, `output/reports/path_b_probe_v2.md` | 2026-11-15 |

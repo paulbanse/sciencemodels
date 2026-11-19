@@ -45,7 +45,7 @@ class Scientist(mesa.Agent):
         self.model = model
         self.visibility = 0
         self.current_local_merit = 0
-        self.ideal_Merit= 0
+        self.ideal_Merit = np.nan  # BUG-0006: unscored until update_ideal_merit runs
         # Path B dyadic state. The zero/false initialisation is
         # dynamics-neutral (no rng, no feedback into the step rule): every
         # reader is guarded behind dyadic_mode != "off" or

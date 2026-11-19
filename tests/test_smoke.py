@@ -22,6 +22,8 @@ Canary run (3 agents, seeded, 30 steps) asserting:
 10. Path B dyadic layer: off-mode bit-identity with every knob cranked plus
     the bit-level anchor (mean_prestige), both formulations binding across
     lambda, and validation of the six new knobs.
+11. regression BUG-0006: unscored step-t newborns (ideal_Merit=NaN) are
+    excluded from correlation_reporter rather than treated as ideal_Merit=0.
 """
 import os
 import sys
@@ -327,7 +329,8 @@ def main():
         "team_tm": 4.239837398373984,
         "rep_tm": 0.8680933654246947,
         "links_tm": 1.7073170731707317,
-        "c_ideal_tm": 0.19920101324636486,
+        # Post-BUG-0006 anchor (pre-BUG-0006 was 0.19920101324636486)
+        "c_ideal_tm": 0.234169150292581,
     }
     m0 = MyModel(**dict(MOVE_PARAMS, dyadic_move_pull=0.0))
     r0 = m0.run_mode_for_bulk()
@@ -343,10 +346,16 @@ def main():
         "c_ideal_tm": float(dc0["Corr_prestige_ideal_merit"].mean()),
     }
     for key, want in V1_ANCHOR.items():
-        assert got0[key] == want, (
-            f"dyadic_move_pull=0.0 is not bit-identical to Path B v1: "
-            f"{key}={got0[key]!r} != {want!r}"
-        )
+        if key == "c_ideal_tm":
+            assert np.isclose(got0[key], want, rtol=0.0, atol=1e-13), (
+                f"dyadic_move_pull=0.0 c_ideal_tm drifted: "
+                f"{got0[key]!r} != {want!r}"
+            )
+        else:
+            assert got0[key] == want, (
+                f"dyadic_move_pull=0.0 is not bit-identical to Path B v1: "
+                f"{key}={got0[key]!r} != {want!r}"
+            )
     print(
         "Path B v2 identity OK: dyadic_move_pull=0.0 reproduces Path B v1 on "
         f"{len(V1_ANCHOR)} anchors"
@@ -395,6 +404,63 @@ def main():
     print(
         "Path B knob validation OK: seven knobs reject invalid values, and a "
         "positive pull with the layer off is refused"
+    )
+
+    # 11. regression BUG-0006: unscored step-t newborns carry ideal_Merit=NaN
+    #     and are excluded from correlation_reporter until updateIdealMerit
+    #     scores them on the following step.
+    class _Bug0006Agent:
+        def __init__(self, prestige, ideal_merit):
+            self.prestige = prestige
+            self.ideal_Merit = ideal_merit
+
+    class _Bug0006Model:
+        def __init__(self, agents):
+            self.agents = agents
+
+    synth = _Bug0006Model([
+        _Bug0006Agent(1.0, -0.3),
+        _Bug0006Agent(2.0, -0.2),
+        _Bug0006Agent(3.0, -0.1),
+        _Bug0006Agent(0.0, np.nan),
+    ])
+    synth_r = metrics.correlation_reporter("ideal_Merit", "prestige")(synth)
+    assert np.isclose(synth_r, 1.0, rtol=0.0, atol=1e-12), (
+        f"BUG-0006 synthetic regression failed: expected 1.0, got {synth_r}"
+    )
+
+    # Live model birth-step test (step 20 is a birth step at g=0.1)
+    live_m = MyModel(**dict(CANARY_PARAMS, agent_generation_time=0.1, step_limit=20))
+    live_m.run_mode_for_bulk()
+    live_dc = live_m.datacollector.get_model_vars_dataframe()
+    unscored = [a for a in live_m.agents if not np.isfinite(a.ideal_Merit)]
+    scored = [a for a in live_m.agents if np.isfinite(a.ideal_Merit)]
+    assert len(unscored) == 1, f"expected 1 unscored step-20 newborn, got {len(unscored)}"
+    assert unscored[0].prestige == 0.0, unscored[0].prestige
+    assert len(scored) == len(live_m.agents) - 1
+    expected_r = np.corrcoef(
+        [a.prestige for a in scored], [a.ideal_Merit for a in scored]
+    )[0, 1]
+    got_r = float(live_dc["Corr_prestige_ideal_merit"].iloc[-1])
+    assert np.isclose(got_r, expected_r, rtol=0.0, atol=1e-12), (
+        f"step-20 corr mismatch: {got_r} != {expected_r}"
+    )
+    # Next step (step 21, non-birth): every agent is scored (0 NaNs)
+    live_m.step(True)
+    assert all(np.isfinite(a.ideal_Merit) for a in live_m.agents), (
+        "non-birth step 21 still has unscored ideal_Merit"
+    )
+    # Zero-entry invariance: 0 NaNs at step 0 and step 30
+    zero_init = MyModel(**CANARY_PARAMS)
+    assert all(np.isfinite(a.ideal_Merit) for a in zero_init.agents), (
+        "g=0 step 0 has NaN ideal_Merit"
+    )
+    assert all(np.isfinite(a.ideal_Merit) for a in model.agents), (
+        "g=0 step 30 has NaN ideal_Merit"
+    )
+    print(
+        f"BUG-0006 regression OK: synth_r={synth_r:.3f}, "
+        f"step20_unscored=1 (corr={got_r:+.4f}), step21_unscored=0, g0_nans=0"
     )
 
     print("ALL SMOKE TESTS PASSED")

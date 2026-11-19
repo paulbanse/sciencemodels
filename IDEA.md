@@ -129,7 +129,7 @@ here.
   UE for a parked strategic item; a P for a route or direction awaiting the
   owner's ruling; an archive move when a first-level document is superseded.
 - Ids are consecutive and never reused; counters currently: next ADR-0003,
-  BUG-0006, CONT5, DE-0001, IE-0001, UE-0001, P-0007.
+  BUG-0007, CONT8, DE-0001, IE-0007, UE-0004, P-0012.
 - Every session leaves one entry in `AdmiralsLog/logs/<YYYY-MM>.md`
   (append-only).
 
