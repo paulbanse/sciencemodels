@@ -10,8 +10,25 @@ self-explanatory.
 House contract: ``PALETTE`` / ``HOUSE_STYLE`` / ``_cosmetics`` /
 ``write_figure_data`` from ``diagram_templates``; zero hardcoded model
 numbers - every plotted value, error bar and annotation is computed here
-from the raw CSVs and written into the ``*_data.csv`` sidecar;
-``assert_text_fits`` guards the canvas (bounds + text-text overlap).
+from the raw CSVs and written into the ``*_data.csv`` sidecar.
+
+v3 repair (Team 2, F10a defects):
+  * Panel B: one legend entry per movement pull (the pooled-label
+    duplication is gone - only the ``mgstd5`` arm carries
+    ``label=f"pull = {pull:g}"``), plus an explicit 2-item linestyle key
+    (solid = ``mgstd5``, dashed = ``noisypr5``); the legend sits in the
+    clear band above the ``pull = 0`` error bars / M1 reference line, and
+    the grey reference lines are identified in the panel note instead of
+    the legend.
+  * Panel C: the 6-item legend is moved OUT of the curves (below the
+    axes), the top-right note keeps a clear band above the highest curve.
+  * Panel D: bar value labels are lifted ABOVE ``ci_hi`` (never on the
+    error bar) with ylim headroom reserved for them.
+  * ``build(outdir, data_root=None)`` / ``compute_table(data_root=None)``
+    are parameterized (default: ``data/path_b_v1`` + ``data/path_b_v2``;
+    one-line switch to the post-BUG-0006 archives once they land), and
+    ``visual_qa.assert_figure_clean`` runs on every panel before
+    ``savefig``.
 
 Aggregation convention (stated in every axis label): panels (a)-(c) pool
 over formulation x credit_sharing (4 cells x 20 seeds = 80 runs per
@@ -38,6 +55,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 _HERE = Path(__file__).resolve().parent
 if str(_HERE) not in sys.path:
@@ -46,6 +64,8 @@ from diagram_templates import PALETTE, HOUSE_STYLE, _cosmetics, write_figure_dat
 
 REPO = _HERE.parent.parent
 DATA = REPO / "data"
+
+FNAME = "F10a_m2_choice_to_production"
 
 #: unfitted Klann empirical benchmarks (diagnostic reference lines ONLY)
 KLANN_TEAM_SIZE = 2.65
@@ -63,6 +83,9 @@ LAND_LS = {"mgstd5": "-", "noisypr5": "--"}
 M1_COLOR = PALETTE["gray"]
 LAM_LABEL = {0.0: "λ = 0 (prestige matching)",
              1.0: "λ = 1 (closeness × local merit)"}
+#: compact legend wording (the full names live in the axis labels/notes)
+LAM_SHORT = {0.0: "λ = 0 · prestige matching",
+             1.0: "λ = 1 · closeness × local merit"}
 
 V1_NAME = re.compile(
     r"cell_lam(\d+)_(logit|threshold)_(equal|struct)_(mgstd5|noisypr5)\.csv")
@@ -83,6 +106,26 @@ def _mean_ci(vals) -> tuple[float, float, float, int]:
 def _require(cond: bool, msg: str) -> None:
     if not cond:
         raise AssertionError(msg)
+
+
+def _paths(data_root=None) -> dict:
+    """Resolve the Path B archives (one place to switch archives).
+
+    ``data_root`` is the directory that holds ``path_b_v1/`` and
+    ``path_b_v2/`` (default: ``data/``).  Pass
+    ``data/bug0006_remeasure_v2``-style roots here once Team 1 publishes
+    the post-BUG-0006 Path B archives.
+    """
+    base = Path(data_root) if data_root is not None else DATA
+    if not base.is_absolute():
+        base = REPO / base
+    return {
+        "base": base,
+        "off": base / "path_b_v1" / "baseline_off.csv",
+        "off_summary": base / "path_b_v1" / "baseline_off_summary.csv",
+        "v1": base / "path_b_v1" / "cells",
+        "v2": base / "path_b_v2" / "cells",
+    }
 
 
 def assert_text_fits(fig, canvas_w: float, canvas_h: float) -> int:
@@ -143,9 +186,10 @@ def assert_text_fits(fig, canvas_w: float, canvas_h: float) -> int:
 
 
 # ------------------------------------------------------------------- input
-def _load_off() -> pd.DataFrame:
+def _load_off(data_root=None) -> pd.DataFrame:
     """M1 (dyadic = off) reference runs: 40 runs, c = 0.5, g = 0.1."""
-    df = pd.read_csv(DATA / "path_b_v1" / "baseline_off.csv")
+    paths = _paths(data_root)
+    df = pd.read_csv(paths["off"])
     _require(len(df) == 40, f"baseline_off.csv: expected 40 runs, got {len(df)}")
     _require(set(df["land"].unique()) == {"mgstd5", "noisypr5"},
              f"baseline_off.csv: unexpected landscapes {sorted(df['land'].unique())}")
@@ -158,7 +202,7 @@ def _load_off() -> pd.DataFrame:
     _require((df["agent_generation_time"] == 0.1).all(),
              "baseline_off.csv: agent_generation_time must be 0.1 everywhere")
     # landscape column / filename check against the archived summary
-    summ = pd.read_csv(DATA / "path_b_v1" / "baseline_off_summary.csv")
+    summ = pd.read_csv(paths["off_summary"])
     for land, g in df.groupby("land"):
         row = summ[summ["land"] == land]
         _require(len(row) == 1, f"baseline_off_summary.csv: no row for {land}")
@@ -169,10 +213,11 @@ def _load_off() -> pd.DataFrame:
     return df
 
 
-def _load_v1() -> pd.DataFrame:
+def _load_v1(data_root=None) -> pd.DataFrame:
     """Path B v1 lambda sweep at pull = 0: 40 cells x 20 seeds = 800 runs."""
+    paths = _paths(data_root)
     rows = []
-    files = sorted((DATA / "path_b_v1" / "cells").glob("cell_lam*.csv"))
+    files = sorted(paths["v1"].glob("cell_lam*.csv"))
     _require(len(files) == 40, f"v1 cells: expected 40 files, got {len(files)}")
     for f in files:
         m = V1_NAME.match(f.name)
@@ -188,10 +233,11 @@ def _load_v1() -> pd.DataFrame:
     return pd.concat(rows, ignore_index=True)
 
 
-def _load_v2() -> pd.DataFrame:
+def _load_v2(data_root=None) -> pd.DataFrame:
     """Path B v2 pull sweep: 48 cells x 20 seeds = 960 runs, pull in {0.5, 1}."""
+    paths = _paths(data_root)
     rows = []
-    files = sorted((DATA / "path_b_v2" / "cells").glob("cell_lam*_pull*.csv"))
+    files = sorted(paths["v2"].glob("cell_lam*_pull*.csv"))
     _require(len(files) == 48, f"v2 cells: expected 48 files, got {len(files)}")
     for f in files:
         m = V2_NAME.match(f.name)
@@ -214,16 +260,16 @@ def _load_v2() -> pd.DataFrame:
 
 
 # --------------------------------------------------------------- sidecar
-def compute_table() -> pd.DataFrame:
+def compute_table(data_root=None) -> pd.DataFrame:
     """Every plotted/annotated quantity as one tidy long table.
 
     Columns: panel, role ('point' | 'reference' | 'annotation'), series,
     metric, x, value, ci_lo, ci_hi, n, note.  Panels (a)-(c) pool over
     formulation x credit (4 cells x 20 seeds = 80 runs per point).
     """
-    off = _load_off()
-    v1 = _load_v1()
-    v2 = _load_v2()
+    off = _load_off(data_root)
+    v1 = _load_v1(data_root)
+    v2 = _load_v2(data_root)
     _require(len(v1) + len(v2) + len(off) == 1800,
              "Path B v1+v2+off must total 1,800 runs")
     runs = pd.concat([v1, v2], ignore_index=True)
@@ -352,17 +398,18 @@ def _errband(ax, g: pd.DataFrame, *, color: str, ls: str, marker: str,
                 capsize=2.5, label=label, **kw)
 
 
-def build(outdir: str = "output/report_notebook_v1") -> dict:
+def build(outdir: str = "output/report_notebook_v1",
+          data_root=None) -> dict:
     out = Path(outdir)
     if not out.is_absolute():
         out = REPO / out
     out.mkdir(parents=True, exist_ok=True)
-    png = out / "F10a_m2_choice_to_production.png"
+    png = out / f"{FNAME}.png"
 
-    table = compute_table()
-    off = _load_off()
-    v1 = _load_v1()
-    v2 = _load_v2()
+    table = compute_table(data_root)
+    off = _load_off(data_root)
+    v1 = _load_v1(data_root)
+    v2 = _load_v2(data_root)
     n_off, n_v1, n_v2 = len(off), len(v1), len(v2)
 
     def t(panel, role, metric, series, x=None):
@@ -374,11 +421,11 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
 
     fig = plt.figure(figsize=(11.6, 8.0))
     gs = fig.add_gridspec(2, 2, left=0.075, right=0.985, top=0.885,
-                          bottom=0.205, hspace=0.50, wspace=0.30)
+                          bottom=0.245, hspace=0.52, wspace=0.30)
     axA = fig.add_subplot(gs[0, 0])
     axB = fig.add_subplot(gs[0, 1])
     axC = fig.add_subplot(gs[1, 0])
-    gs_d = gs[1, 1].subgridspec(1, 2, width_ratios=[2.2, 1.0], wspace=0.42)
+    gs_d = gs[1, 1].subgridspec(1, 2, width_ratios=[3.0, 1.0], wspace=0.40)
     axD = fig.add_subplot(gs_d[0])
     axRep = fig.add_subplot(gs_d[1])
 
@@ -408,16 +455,21 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
         f"declared-link assortativity link_assort_tm (mgstd5):\n"
         f"pull = 0 {la[0]:+.2f} → {la[1]:+.2f}; pull = 1 {la[2]:+.2f} → {la[3]:+.2f}"),
         transform=axA.transAxes, fontsize=HOUSE_STYLE["note_size"],
-        color=PALETTE["gray"], va="bottom", ha="right")
+        color=PALETTE["gray"], va="bottom", ha="right",
+        bbox=dict(facecolor="white", edgecolor="none", pad=1.6))
     axA.legend(loc="upper left", fontsize=HOUSE_STYLE["tick_size"] - 1,
                title="movement pull", title_fontsize=HOUSE_STYLE["tick_size"] - 1,
-               frameon=False)
+               frameon=True, facecolor="white", edgecolor="none",
+               framealpha=1.0, handlelength=2.2, labelspacing=0.3,
+               borderpad=0.3)
     _cosmetics(axA, HOUSE_STYLE,
                "A · Choice layer: active declared links (links_tm)",
                "partner choice  λ = dyadic_lambda",
                "links_tm (time mean · run mean)")
+    axA.set_xticks([0.0, 0.5, 1.0])
     axA.set_xlim(-0.06, 1.06)
     axA.set_ylim(0, 11.0)
+    axA.yaxis.labelpad = 9.0
 
     # ---- B: production layer, team_tm vs lambda ----
     for pull in (0.0, 0.5, 1.0):
@@ -425,20 +477,21 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
             g = table[(table["panel"] == "B") & (table["role"] == "point")
                       & (table["metric"] == "team_tm")
                       & (table["series"] == f"pull = {pull:g} | {land}")]
+            # v3: ONE legend entry per pull (mgstd5 arm only) - the earlier
+            # duplicate "pull = x" labels came from labelling both arms.
             _errband(axB, g, color=PULL_COLOR[pull], ls=LAND_LS[land],
-                     marker="o", label=f"pull = {pull:g}")
+                     marker="o", label=f"pull = {pull:g}" if land == "mgstd5"
+                     else None)
     m1_team = {land: float(t("B", "reference", "team_tm",
                              f"M1 (dyadic = off) | {land}")["value"].iloc[0])
                for land in ("mgstd5", "noisypr5")}
+    # reference lines: identified in the panel note (no legend clutter)
     axB.axhline(m1_team["mgstd5"], color=M1_COLOR, linestyle="--",
-                linewidth=1.2, zorder=2,
-                label=f"M1 (dyadic = off) mgstd5 = {m1_team['mgstd5']:.2f}")
+                linewidth=1.2, zorder=2)
     axB.axhline(m1_team["noisypr5"], color=M1_COLOR, linestyle=":",
-                linewidth=1.2, zorder=2,
-                label=f"M1 (dyadic = off) noisypr5 = {m1_team['noisypr5']:.2f}")
+                linewidth=1.2, zorder=2)
     axB.axhline(KLANN_TEAM_SIZE, color=M1_COLOR, linestyle=":", linewidth=1.4,
-                zorder=2,
-                label=f"{KLANN_TEAM_SIZE:.2f} Klann team size — {BENCH_LABEL}")
+                zorder=2)
     b0 = {land: (float(t("B", "annotation", "team_tm_pull0_min",
                          f"pull = 0 | {land}")["value"].iloc[0]),
                  float(t("B", "annotation", "team_tm_pull0_max",
@@ -448,22 +501,43 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
                                f"pull = 1 | {land}", lam)["value"].iloc[0])
           for land in ("mgstd5", "noisypr5") for lam in (0.0, 1.0)}
     axB.text(0.015, 0.025, (
-        f"pull = 0 inert (flat): {b0['mgstd5'][0]:.2f}–{b0['mgstd5'][1]:.2f} (mgstd5), "
-        f"{b0['noisypr5'][0]:.2f}–{b0['noisypr5'][1]:.2f} (noisypr5)\n"
+        f"pull = 0 inert (flat): {b0['mgstd5'][0]:.2f}–{b0['mgstd5'][1]:.2f} "
+        f"(mgstd5), {b0['noisypr5'][0]:.2f}–{b0['noisypr5'][1]:.2f} (noisypr5)\n"
         f"pull = 1 (mgstd5): {m1_team['mgstd5']:.2f} (M1) → {b1[('mgstd5', 0.0)]:.2f} "
         f"(λ = 0) → {b1[('mgstd5', 1.0)]:.2f} (λ = 1)\n"
-        f"pull = 1 (noisypr5): {b1[('noisypr5', 0.0)]:.2f} (λ = 0) → "
-        f"{b1[('noisypr5', 1.0)]:.2f} (λ = 1), below the {KLANN_TEAM_SIZE:.2f} benchmark"),
-        transform=axB.transAxes, fontsize=HOUSE_STYLE["note_size"],
-        color=PALETTE["gray"], va="bottom", ha="left")
-    axB.legend(loc="upper right", fontsize=HOUSE_STYLE["tick_size"] - 1.5,
-               ncol=2, frameon=False)
+        f"pull = 1 (noisypr5): {b1[('noisypr5', 0.0)]:.2f} → {b1[('noisypr5', 1.0)]:.2f}, "
+        f"below the {KLANN_TEAM_SIZE:.2f} benchmark"),
+        transform=axB.transAxes, fontsize=HOUSE_STYLE["note_size"] - 0.5,
+        color=PALETTE["gray"], va="bottom", ha="left",
+        bbox=dict(facecolor="white", edgecolor="none", pad=1.6))
+    # v3 legend: 3 movement-pull entries (hue) + a clean 2-item linestyle
+    # key (solid = mgstd5, dashed = noisypr5), in the empty band above the
+    # pull = 0 error bars and the M1 reference line.
+    land_key = [
+        Line2D([0], [0], color=PALETTE["gray"], linestyle="-", linewidth=1.6,
+               label="mgstd5 (solid)"),
+        Line2D([0], [0], color=PALETTE["gray"], linestyle="--", linewidth=1.6,
+               label="noisypr5 (dashed)"),
+    ]
+    pull_key = [
+        Line2D([0], [0], color=PULL_COLOR[p], linestyle="-", marker="o",
+               markersize=5, linewidth=1.6, label=f"pull = {p:g}")
+        for p in (0.0, 0.5, 1.0)
+    ]
+    axB.legend(handles=pull_key + land_key, loc="upper center",
+               bbox_to_anchor=(0.5, 0.995), ncol=2, frameon=True,
+               facecolor="white", edgecolor="none", framealpha=1.0,
+               fontsize=HOUSE_STYLE["tick_size"] - 1.5,
+               handlelength=1.8, columnspacing=1.2, labelspacing=0.25,
+               borderpad=0.1)
     _cosmetics(axB, HOUSE_STYLE,
                "B · Production layer: co-harvest team size (team_tm)",
                "partner choice  λ = dyadic_lambda",
                "team_tm (time mean · run mean)")
+    axB.set_xticks([0.0, 0.5, 1.0])
     axB.set_xlim(-0.06, 1.06)
-    axB.set_ylim(0, 11.5)
+    axB.set_ylim(0, 12.8)
+    axB.yaxis.labelpad = 9.0
 
     # ---- C: signal alignment, c_ideal_tm vs pull ----
     for lam in (0.0, 1.0):
@@ -473,21 +547,21 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
                       & (table["metric"] == "c_ideal_tm")
                       & (table["series"] == series)]
             _errband(axC, g, color=LAM_COLOR[lam], ls=LAND_LS[land],
-                     marker="o", label=f"{LAM_LABEL[lam]} · {land}")
+                     marker="o", label=f"λ={lam:g} · {land}")
     m1_ci = {land: float(t("C", "reference", "c_ideal_tm",
                            f"M1 (dyadic = off) | {land}")["value"].iloc[0])
              for land in ("mgstd5", "noisypr5")}
     for land in ("mgstd5", "noisypr5"):
         axC.axhline(m1_ci[land], color=M1_COLOR, linestyle="--" if land == "mgstd5"
                     else ":", linewidth=1.2, zorder=2,
-                    label=f"M1 (dyadic = off) · {land} = {m1_ci[land]:+.3f}")
+                    label=f"M1 (dyadic off) · {land}")
     c_end = {(lam, land): float(t("C", "point", "c_ideal_tm",
                                   f"{LAM_LABEL[lam]} | {land}", 1.0)["value"].iloc[0])
              for lam in (0.0, 1.0) for land in ("mgstd5", "noisypr5")}
     w_end = {(lam, land): float(t("C", "annotation", "wedge_tm",
                                   f"{LAM_LABEL[lam]} | {land}", 1.0)["value"].iloc[0])
              for lam in (0.0, 1.0) for land in ("mgstd5", "noisypr5")}
-    axC.text(0.975, 0.975, (
+    axC.text(0.985, 0.985, (
         f"at pull = 1: mgstd5 λ=0 {m1_ci['mgstd5']:+.3f} → "
         f"{c_end[(0.0, 'mgstd5')]:+.3f} (below M1), λ=1 → "
         f"{c_end[(1.0, 'mgstd5')]:+.3f} (above M1)\n"
@@ -495,17 +569,23 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
         f"λ=1 → {c_end[(1.0, 'noisypr5')]:+.3f}\n"
         f"wedge_tm (mgstd5): λ=0 {w_end[(0.0, 'mgstd5')]:+.3f} → "
         f"λ=1 {w_end[(1.0, 'mgstd5')]:+.3f} (sign inversion)"),
-        transform=axC.transAxes, fontsize=HOUSE_STYLE["note_size"],
-        color=PALETTE["gray"], va="top", ha="right")
-    axC.legend(loc="center left", fontsize=HOUSE_STYLE["tick_size"] - 2,
-               frameon=False)
+        transform=axC.transAxes, fontsize=HOUSE_STYLE["note_size"] - 0.5,
+        color=PALETTE["gray"], va="top", ha="right",
+        bbox=dict(facecolor="white", edgecolor="none", pad=1.6))
     _cosmetics(axC, HOUSE_STYLE,
                "C · Signal alignment vs movement coupling",
                "movement coupling  dyadic_move_pull",
                "Corr(prestige, ideal merit) (time mean · run mean)")
     axC.set_xticks([0.0, 0.5, 1.0])
     axC.set_xlim(-0.08, 1.08)
-    axC.set_ylim(-0.03, 0.52)
+    axC.yaxis.labelpad = 9.0
+    # v3: top band keeps the note clear of the highest curve and of the y
+    # ticks; the 6-item legend is moved OUT of the curves (below the axes).
+    axC.set_ylim(-0.035, 0.56)
+    axC.legend(loc="upper center", bbox_to_anchor=(0.5, -0.32), ncol=3,
+               frameon=False, fontsize=HOUSE_STYLE["tick_size"] - 2,
+               handlelength=2.2, columnspacing=1.6, labelspacing=0.3,
+               borderpad=0.1)
 
     # ---- D: formulation x credit at pull = 1.0, mgstd5 + rep_tm strip ----
     combos = [("logit", "equal_split"), ("logit", "structural"),
@@ -513,6 +593,7 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
     xs = np.arange(len(combos), dtype=float)
     vmax_hi = 0.0
     width = 0.36
+    bar_data: dict[float, tuple] = {}
     for k, lam in enumerate((0.0, 1.0)):
         vals, los, his = [], [], []
         for formulation, credit in combos:
@@ -527,21 +608,30 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
         axD.bar(pos, vals, width=width * 0.92, color=LAM_COLOR[lam],
                 yerr=np.vstack([np.array(vals) - np.array(los),
                                 np.array(his) - np.array(vals)]),
-                capsize=3, label=LAM_LABEL[lam], edgecolor="white")
-        for x_, v_ in zip(pos, vals):
-            axD.text(x_, v_, f"{v_:.2f}", ha="center", va="bottom",
-                     fontsize=HOUSE_STYLE["tick_size"] - 1.5, color=PALETTE["gray"])
+                capsize=3, label=LAM_SHORT[lam], edgecolor="white")
+        bar_data[lam] = (pos, vals, los, his)
     axD.set_xticks(xs)
     axD.set_xticklabels(["logit\n+ equal", "logit\n+ structural",
                          "threshold\n+ equal", "threshold\n+ structural"],
-                        fontsize=HOUSE_STYLE["tick_size"] - 1)
-    axD.legend(loc="upper right", fontsize=HOUSE_STYLE["tick_size"] - 1,
-               frameon=False)
+                        fontsize=HOUSE_STYLE["tick_size"] - 2)
     _cosmetics(axD, HOUSE_STYLE,
                "D · Robustness at pull = 1.0",
                "formulation + credit_sharing (mgstd5)",
                "team_tm (time mean · run mean)")
-    axD.set_ylim(0, vmax_hi * 1.30)
+    axD.set_ylim(0, vmax_hi * 1.40)
+    axD.yaxis.labelpad = 9.0
+    # v3: value labels ABOVE the upper CI cap (they sat on the error bar
+    # before), with the ylim headroom reserved for exactly that.
+    label_pad = 0.025 * (axD.get_ylim()[1] - axD.get_ylim()[0])
+    for lam in (0.0, 1.0):
+        pos, vals, _los, his = bar_data[lam]
+        for x_, v_, hi_ in zip(pos, vals, his):
+            axD.text(x_, hi_ + label_pad, f"{v_:.2f}", ha="center", va="bottom",
+                     fontsize=HOUSE_STYLE["tick_size"] - 1.5,
+                     color=PALETTE["gray"])
+    axD.legend(loc="upper left", bbox_to_anchor=(0.0, 0.995), ncol=1,
+               fontsize=HOUSE_STYLE["tick_size"] - 2, frameon=False,
+               handlelength=1.6, labelspacing=0.3, borderpad=0.1)
 
     # rep_tm strip paired with the bars (same 8 cells)
     jitter = (-0.12, -0.04, 0.04, 0.12)
@@ -553,13 +643,17 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
                       & (table["series"] == f"{formulation} + {credit} | {LAM_LABEL[lam]}")]
             ys.append(float(g["value"].iloc[0]))
         axRep.plot([k + j for j in jitter], ys, marker="D", linestyle="none",
-                   color=LAM_COLOR[lam], markersize=4.5)
+                   color=LAM_COLOR[lam], markersize=4.5,
+                   label=f"λ={lam:g} · 4 cells")
     axRep.axhline(KLANN_REPEATED_SHARE, color=M1_COLOR, linestyle=":",
                   linewidth=1.2)
-    axRep.text(0.03, KLANN_REPEATED_SHARE,
+    # v3: the strip is narrow - keep the benchmark label inside the axes
+    # (small type, two lines) instead of letting it run into the margin.
+    axRep.text(0.02, KLANN_REPEATED_SHARE + 0.006,
                f"{KLANN_REPEATED_SHARE:.2f} Empirical\nbenchmark (unfitted)",
-               transform=axRep.get_yaxis_transform(), fontsize=6.5,
-               color=PALETTE["gray"], va="bottom", ha="left")
+               transform=axRep.get_yaxis_transform(), fontsize=6.0,
+               color=PALETTE["gray"], va="bottom", ha="left",
+               bbox=dict(facecolor="white", edgecolor="none", pad=1.2))
     rep_vals = table[(table["panel"] == "D") & (table["metric"] == "rep_tm")
                      & (table["role"] == "point")]["value"]
     rep_lo, rep_hi = float(rep_vals.min()), float(rep_vals.max())
@@ -571,33 +665,51 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
                "rep_tm (time mean · run mean)")
     axRep.title.set_fontsize(HOUSE_STYLE["note_size"])
     axRep.set_xlim(-0.55, 1.55)
-    axRep.set_ylim(KLANN_REPEATED_SHARE * 0.8, 1.02)
-    axRep.text(0.5, 0.985, f"flat: {rep_lo:.3f}–{rep_hi:.3f}",
+    axRep.yaxis.labelpad = 8.0
+    axRep.set_ylim(KLANN_REPEATED_SHARE * 0.8, 1.06)
+    axRep.text(0.5, 0.99, f"flat: {rep_lo:.3f}–{rep_hi:.3f}",
                transform=axRep.transAxes, fontsize=6.5,
                color=PALETTE["gray"], va="top", ha="center")
 
     # ---- figure frame, legend, footnote ----
-    fig.suptitle("F10a · How M2 works end-to-end: partner choice (λ) → movement "
-                 "coupling → teams, alignment, repetition\n"
-                 "(panels a–c pooled over formulation × credit, 4 cells × 20 seeds)",
-                 fontsize=HOUSE_STYLE["title_size"] + 1, y=0.995)
+    fig.text(0.5, 0.995, "F10a · How M2 works end-to-end: partner choice (λ) → "
+             "movement coupling → teams, alignment, repetition\n"
+             "(panels a–c pooled over formulation × credit, 4 cells × 20 seeds)",
+             fontsize=HOUSE_STYLE["title_size"] + 1, ha="center", va="top")
     note_lines = [
         f"Sources (read-only): data/path_b_v1/baseline_off.csv ({n_off} runs, M1 dyadic = off), "
         f"data/path_b_v1/cells ({n_v1} runs), data/path_b_v2/cells ({n_v2} runs) — "
         f"{n_off + n_v1 + n_v2:,} Path B runs total. Panels (a)–(c): means over runs pooled over "
         f"formulation × credit (4 cells × 20 seeds = 80 runs per point); error bars 95% CI = "
         f"mean ± 1.96 SE over runs. Panel (d): pull = 1.0, mgstd5, per cell (20 seeds).",
-        "Solid = mgstd5, dashed/dotted = noisypr5. λ = 1 (closeness × local merit); λ = 0 "
+        "Solid = mgstd5, dashed = noisypr5. λ = 1 (closeness × local merit); λ = 0 "
         "(prestige matching). Grey dashed/dotted = M1 (dyadic = off) references from "
         "baseline_off.csv. Klann team size 2.65 and repeated share 0.34: Empirical benchmark "
         "(unfitted) — model-internal, not calibrated.",
     ]
-    note = "\n".join(textwrap.fill(t, width=172) for t in note_lines)
-    fig.text(0.01, 0.012, note, fontsize=HOUSE_STYLE["note_size"],
+    note = "\n".join(textwrap.fill(t, width=176) for t in note_lines)
+    fig.text(0.01, 0.010, note, fontsize=HOUSE_STYLE["note_size"],
              color=PALETTE["gray"], va="bottom")
 
     n_text = assert_text_fits(fig, fig.get_size_inches()[0] * fig.dpi,
                               fig.get_size_inches()[1] * fig.dpi)
+
+    import visual_qa  # v3 hardened contract (rendered artists + collisions)
+    visual_qa.assert_figure_clean(fig, [
+        {"ax": axA, "metric": "links_tm", "expect_lines": 6,
+         "sidecar": table, "filters": {"panel": "A", "role": "point"}},
+        {"ax": axB, "metric": "team_tm", "expect_lines": 6,
+         "sidecar": table, "filters": {"panel": "B", "role": "point"}},
+        {"ax": axC, "metric": "c_ideal_tm", "expect_lines": 4,
+         "sidecar": table, "filters": {"panel": "C", "role": "point"}},
+        {"ax": axD, "metric": "team_tm", "expect_bars": 8,
+         "sidecar": table, "filters": {"panel": "D", "role": "point"}},
+        {"ax": axRep, "metric": "rep_tm", "expect_lines": 2,
+         "points_per_line": 4, "sidecar": table,
+         "ci_cols": ("value", "value"),  # markers only: no CI whiskers drawn
+         "filters": {"panel": "D", "role": "point"}},
+    ])
+
     fig.savefig(png, dpi=HOUSE_STYLE["dpi"])
     fig.savefig(png.with_suffix(".pdf"))
     plt.close(fig)

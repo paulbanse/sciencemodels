@@ -6,6 +6,17 @@
 the 20,000-resample percentile bootstrap (seed 20261115) independently,
 asserts the expected counts (480 runs; 24 conditions x 20 seeds) and the
 ``wedge_fin = c_ideal_fin - c_local_fin`` identity, and compares at ``tol``.
+
+It then re-runs the rendered-canvas contract: the figure is rebuilt in memory
+via the builder's ``_figure`` helper and put through
+``visual_qa.assert_figure_clean`` (artist counts, plotted-vs-sidecar min/max,
+ylim headroom, text/text-title/text-data collisions, legend duplicates) and
+``assert_text_fits``.  A sidecar that survives the numeric check but renders a
+collision (the v2 failure mode) therefore fails here.
+
+``data_root`` accepts the archive directory (default ``data/typology_v1``) or
+its ``cells`` subdirectory; both the recomputation and the rebuild use it.
+
 Empty return list = all checks pass.
 """
 from __future__ import annotations
@@ -17,7 +28,6 @@ import pandas as pd
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-DATA = REPO / "data" / "typology_v1"
 FNAME = "F9_v2_typology_annealing"
 BOOT_SEED = 20261115
 BOOT_N = 20000
@@ -49,8 +59,36 @@ def _paired(t: pd.DataFrame, col: str, a: tuple, z: tuple,
     return pa - pz
 
 
-def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[str]:
+def _rerun_visual_contract(data_root, fails: list[str]) -> None:
+    """Rebuild the figure in memory and assert the rendered canvas is clean."""
+    import matplotlib.pyplot as plt
+
+    import figC_typology_annealing as builder
+    import visual_qa
+    from turnover_lifecycle_figure import assert_text_fits
+
+    fig = None
+    try:
+        side = builder.series_rows(builder.load_runs(data_root), data_root)
+        fig, panels = builder._figure(side)
+        w, h = fig.get_size_inches() * fig.dpi
+        assert_text_fits(fig, w, h)
+        visual_qa.assert_figure_clean(fig, panels)
+    except AssertionError as exc:
+        fails.append(f"visual contract: {exc}")
+    except Exception as exc:  # noqa: BLE001 - a crash is a failure, never a pass
+        fails.append(f"visual contract raised: {exc!r}")
+    finally:
+        if fig is not None:
+            plt.close(fig)
+
+
+def check(outdir: str = "output/report_notebook_v1", data_root=None,
+          tol: float = 1e-9) -> list[str]:
+    import figC_typology_annealing as builder
+
     fails: list[str] = []
+    root = builder.data_root_path(data_root)
     out = (REPO / outdir) if not Path(outdir).is_absolute() else Path(outdir)
     sidecar_path = out / f"{FNAME}_data.csv"
     if not sidecar_path.exists():
@@ -60,7 +98,7 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
         if not p.exists():
             fails.append(f"missing figure file: {p}")
     side = pd.read_csv(sidecar_path)
-    t = pd.read_csv(DATA / "runs.csv")
+    t = pd.read_csv(root / "runs.csv")
 
     # ---- input counts and sign identity -------------------------------
     if len(t) != 480:
@@ -130,7 +168,7 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
             lo, hi = _boot_ci(sub.to_numpy())
             return float(sub.mean()), lo, hi, len(sub)
         if st == "cross_check":
-            ct = pd.read_csv(DATA / "contrast_table.csv")
+            ct = pd.read_csv(root / "contrast_table.csv")
             spec = {
                 "ideal_loss_cum destruction_main (contrast_table cross-check)":
                     ("ideal_loss_cum",
@@ -178,6 +216,9 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
             elif abs(float(got) - float(w)) > tol:
                 fails.append(f"{row['metric']} ({row['statistic']}) {label}: "
                              f"sidecar {got} vs recomputed {w}")
+
+    # ---- rendered-canvas contract (visual_qa, re-run independently) -----
+    _rerun_visual_contract(data_root, fails)
     return fails
 
 

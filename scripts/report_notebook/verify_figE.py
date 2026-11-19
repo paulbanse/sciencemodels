@@ -1,13 +1,18 @@
 """Independent verifier for F10a (figE_m2_choice_to_production).
 
-Exposes ``check(outdir="output/report_notebook_v1", tol=1e-9) -> list[str]``:
-empty list = all checks pass.  Every plotted quantity is recomputed from
-the RAW source CSVs (never from the sidecar) and compared against
-``F10a_m2_choice_to_production_data.csv``; the verifier also asserts the
-expected input run/cell counts (40 off + 800 Path B v1 + 960 Path B v2 =
-1,800 runs), the baseline_off vs baseline_off_summary aggregation
-identity, and re-runs the figure build (which asserts zero clipped /
-overlapping text artists on the canvas).
+Exposes ``check(outdir="output/report_notebook_v1", data_root=None,
+tol=1e-9) -> list[str]``: empty list = all checks pass.  Every plotted
+quantity is recomputed from the RAW source CSVs (never from the sidecar)
+and compared against ``F10a_m2_choice_to_production_data.csv``; the
+verifier also asserts the expected input run/cell counts (40 off + 800
+Path B v1 + 960 Path B v2 = 1,800 runs), the baseline_off vs
+baseline_off_summary aggregation identity, and re-runs the figure build in
+a temporary directory -- which itself re-runs ``assert_text_fits`` AND
+``visual_qa.assert_figure_clean`` on the rendered artists of every panel
+(v3 contract: the verifier fails if the builder's QA can no longer pass).
+
+``data_root`` is the directory holding ``path_b_v1/`` and ``path_b_v2/``
+(default: ``data/``), mirroring ``build(outdir, data_root=...)``.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ import importlib.util
 import re
 import sys
 import tempfile
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -38,6 +44,19 @@ V2_NAME = re.compile(
     r"cell_lam(\d+)_pull(\d+)_(logit|threshold)_(equal|struct)_(mgstd5|noisypr5)\.csv")
 
 
+def _paths(data_root=None) -> dict:
+    base = Path(data_root) if data_root is not None else DATA
+    if not base.is_absolute():
+        base = REPO / base
+    return {
+        "base": base,
+        "off": base / "path_b_v1" / "baseline_off.csv",
+        "off_summary": base / "path_b_v1" / "baseline_off_summary.csv",
+        "v1": base / "path_b_v1" / "cells",
+        "v2": base / "path_b_v2" / "cells",
+    }
+
+
 def _mean_ci(vals) -> tuple[float, float, float, int]:
     v = np.asarray(vals, dtype=float)
     n = int(v.size)
@@ -46,12 +65,13 @@ def _mean_ci(vals) -> tuple[float, float, float, int]:
     return m, m - half, m + half, n
 
 
-def _recompute() -> pd.DataFrame:
+def _recompute(data_root=None):
     """Rebuild the expected sidecar table from the raw CSVs (independent)."""
+    paths = _paths(data_root)
     failures: list[str] = []
 
     # -- raw loads with count assertions --
-    off = pd.read_csv(DATA / "path_b_v1" / "baseline_off.csv")
+    off = pd.read_csv(paths["off"])
     if len(off) != 40:
         failures.append(f"baseline_off.csv: expected 40 runs, got {len(off)}")
     per_land = off.groupby("land").size().to_dict()
@@ -59,7 +79,7 @@ def _recompute() -> pd.DataFrame:
         failures.append(f"baseline_off.csv: 20 runs per land expected, got {per_land}")
 
     v1_rows = []
-    v1_files = sorted((DATA / "path_b_v1" / "cells").glob("cell_lam*.csv"))
+    v1_files = sorted(paths["v1"].glob("cell_lam*.csv"))
     if len(v1_files) != 40:
         failures.append(f"v1 cells: expected 40 files, got {len(v1_files)}")
     for f in v1_files:
@@ -77,7 +97,7 @@ def _recompute() -> pd.DataFrame:
     v1 = pd.concat(v1_rows, ignore_index=True)
 
     v2_rows = []
-    v2_files = sorted((DATA / "path_b_v2" / "cells").glob("cell_lam*_pull*.csv"))
+    v2_files = sorted(paths["v2"].glob("cell_lam*_pull*.csv"))
     if len(v2_files) != 48:
         failures.append(f"v2 cells: expected 48 files, got {len(v2_files)}")
     for f in v2_files:
@@ -102,7 +122,7 @@ def _recompute() -> pd.DataFrame:
         failures.append("Path B v1+v2+off must total 1,800 runs")
 
     # -- aggregation identity: baseline_off vs its archived summary --
-    summ = pd.read_csv(DATA / "path_b_v1" / "baseline_off_summary.csv")
+    summ = pd.read_csv(paths["off_summary"])
     for land, g in off.groupby("land"):
         row = summ[summ["land"] == land]
         for col in ("team_tm", "rep_tm", "links_tm", "c_ideal_tm",
@@ -217,13 +237,14 @@ def _recompute() -> pd.DataFrame:
             failures, exp)
 
 
-def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[str]:
+def check(outdir: str = "output/report_notebook_v1", data_root=None,
+          tol: float = 1e-9) -> list[str]:
     out = Path(outdir)
     if not out.is_absolute():
         out = REPO / out
     failures: list[str] = []
 
-    _, load_failures, exp = _recompute()
+    _, load_failures, exp = _recompute(data_root)
     failures.extend(load_failures)
     if load_failures:
         return failures
@@ -261,7 +282,9 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
         if key not in seen:
             failures.append(f"missing sidecar row {key}")
 
-    # text-fit: re-run the build (its assert_text_fits audits the canvas)
+    # rendered-artist + collision contract: re-run the build in a temp dir.
+    # build() calls assert_text_fits AND visual_qa.assert_figure_clean
+    # before savefig, so a QA regression surfaces here as a failure.
     try:
         spec = importlib.util.spec_from_file_location(
             "figE_m2_choice_to_production",
@@ -269,9 +292,10 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         with tempfile.TemporaryDirectory() as tmp:
-            mod.build(outdir=tmp)
+            mod.build(outdir=tmp, data_root=data_root)
     except Exception as exc:  # noqa: BLE001
-        failures.append(f"figure rebuild / text-fit assertion failed: {exc}")
+        failures.append(f"figure rebuild / visual_qa assertion failed: {exc}\n"
+                        + traceback.format_exc(limit=3))
 
     return failures
 

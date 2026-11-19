@@ -51,6 +51,7 @@ from diagram_templates import (  # noqa: E402
     write_figure_data,
 )
 from turnover_lifecycle_figure import assert_text_fits  # noqa: E402
+import visual_qa  # noqa: E402
 
 CELLS = REPO / "data" / "interventions_v1" / "cells"
 FNAME = "F12_sabbaticals_vs_lotteries"
@@ -88,8 +89,12 @@ def _require(cond: bool, msg: str) -> None:
 
 
 # ----------------------------------------------------------------- data ----
-def load_runs() -> pd.DataFrame:
-    files = sorted(CELLS.glob("cellB_*.csv"))
+def data_root_path(data_root=None) -> Path:
+    return Path(data_root) if data_root is not None else CELLS
+
+
+def load_runs(data_root=None) -> pd.DataFrame:
+    files = sorted(data_root_path(data_root).glob("cellB_*.csv"))
     _require(len(files) == 36, f"cellB files=36, found {len(files)}")
     frames = []
     for f in files:
@@ -249,10 +254,33 @@ def _bands(ax) -> None:
     for xv in (0.6, 0.8):
         ax.axvline(xv, ls="--", lw=0.9, color=PALETTE["gray"], zorder=1)
     ax.axvspan(0.8, 1.0, color=PALETTE["gray_light"], alpha=0.35, zorder=0)
+    # v3: band labels are placed by _band_labels() AFTER the series are drawn,
+    # because their position must be free of data (they used to collide with
+    # curves reaching the top of a panel).
+
+
+def _band_labels(ax) -> None:
+    """Place the three band labels in the first data-free band of the panel."""
     for x, lab in ((0.45, "Stage 1"), (0.70, "kink"), (0.90, "Stage 2")):
-        ax.text(x, 0.96, lab, transform=ax.get_xaxis_transform(),
-                ha="center", va="top", fontsize=HOUSE_STYLE["tick_size"],
-                color=PALETTE["gray"])
+        placed = False
+        for y, va in ((0.965, "top"), (0.500, "center"), (0.035, "bottom"),
+                      (0.250, "center"), (0.750, "center")):
+            t = ax.text(x, y, lab, transform=ax.get_xaxis_transform(),
+                        ha="center", va=va,
+                        fontsize=HOUSE_STYLE["tick_size"] - 1,
+                        color=PALETTE["gray"], zorder=5)
+            try:
+                _no_text_overlap(ax.figure)
+            except AssertionError:
+                t.remove()
+                continue
+            if visual_qa.text_hits_data(ax, t):
+                t.remove()
+                continue
+            placed = True
+            break
+        if not placed:
+            raise AssertionError(f"no data-free band-label position for {lab!r}")
 
 
 def _no_text_overlap(fig) -> None:
@@ -306,9 +334,15 @@ def _place_callout(ax, text: str, prefer: tuple[str, ...] = ()) -> None:
         "br": (0.96, 0.06, "right", "bottom"),
         "ml": (0.04, 0.50, "left", "center"),
         "mr": (0.96, 0.50, "right", "center"),
+        "tr2": (0.96, 0.76, "right", "top"),
+        "tl2": (0.04, 0.76, "left", "top"),
+        "br2": (0.96, 0.24, "right", "bottom"),
+        "bl2": (0.04, 0.24, "left", "bottom"),
     }
     order = tuple(prefer) + tuple(k for k in anchors if k not in prefer)
     pts = _points_axes_coords(ax)
+    # v3: wrap to a narrow block so a long callout can fit beside the curves
+    text = "\n".join(textwrap.fill(t, width=42) for t in text.split("\n"))
     nlines = len(text.split("\n"))
     w = max(len(t) for t in text.split("\n")) * 0.0072
     h = 0.075 * nlines + 0.02
@@ -337,6 +371,9 @@ def _place_callout(ax, text: str, prefer: tuple[str, ...] = ()) -> None:
         except AssertionError:
             t.remove()
             continue
+        if visual_qa.text_hits_data(ax, t):   # v3: caps/whiskers, not only points
+            t.remove()
+            continue
         return
     raise AssertionError(f"no free placement found for callout: {text[:40]!r}")
 
@@ -355,8 +392,9 @@ def _plot_arm(ax, s: pd.DataFrame, alpha: float, preloc: float) -> None:
                 markeredgecolor=HUE[preloc], markeredgewidth=1.0)
 
 
-def build(outdir: str = "output/report_notebook_v1") -> dict:
-    b = load_runs()
+def build(outdir: str = "output/report_notebook_v1",
+          data_root=None) -> dict:
+    b = load_runs(data_root)
     series = series_rows(b)
     anns = annotation_rows(b)
     sidecar = pd.concat([series, anns], ignore_index=True)
@@ -382,9 +420,10 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
     }
     for ax, metric, ylabel in panels:
         _bands(ax)
+        s_metric = series[series["metric"] == metric]  # v3: single-metric panel
         for alpha in ALPHAS:
             for preloc in PRELOCS:
-                _plot_arm(ax, series, alpha, preloc)
+                _plot_arm(ax, s_metric, alpha, preloc)
         ax.set_xlim(0.0, 1.0)
         ax.set_xticks(list(XIS))
         _cosmetics(ax, HOUSE_STYLE, titles[ax],
@@ -419,7 +458,9 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
     fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=8,
                frameon=False, bbox_to_anchor=(0.5, 0.082))
     footnote = (
-        "Sources: data/interventions_v1/cells/cellB_*.csv (36 cells x 20 seeds = "
+        "Sources: "
+        + str(data_root_path(data_root).relative_to(REPO))
+        + "/cellB_*.csv (36 cells x 20 seeds = "
         "720 runs; curves pool mgstd5+noisypr5, per-landscape rows in the data "
         "CSV). Curves: run means +/- 95% CI (1.96*sd/sqrt(n)); xi = 1 - c = "
         "visibility_weight. "
@@ -441,9 +482,27 @@ def build(outdir: str = "output/report_notebook_v1") -> dict:
     fig.subplots_adjust(left=0.075, right=0.975, top=0.93, bottom=0.215,
                         hspace=0.42, wspace=0.26)
 
+    # v3: band labels LAST, after subplots_adjust -- fixed-point text boxes
+    # grow relative to a shrinking axes, so a placement that passes before the
+    # final layout can collide afterwards (panel D's callout vs 'Stage 1').
+    for ax in (ax_a, ax_b, ax_c, ax_d):
+        _band_labels(ax)
+
     w, h = fig.get_size_inches() * fig.dpi
     assert_text_fits(fig, w, h)
     _no_text_overlap(fig)
+
+    import visual_qa  # v3 hardened contract (rendered artists + collisions)
+    _qa_common = {"expect_lines": 6, "points_per_line": 3,
+                  "sidecar": series, "filters": {"landscape": "pooled"}}
+    visual_qa.assert_figure_clean(fig, [
+        {"ax": ax_a, "metric": "harvested knowledge share", **_qa_common},
+        {"ax": ax_b, "metric": "explored grid share", **_qa_common},
+        {"ax": ax_c, "metric": "terminal 1-step loss (-ideal_merit_sum_final)",
+         **_qa_common},
+        {"ax": ax_d, "metric": "Corr(prestige, ideal merit) (time mean)",
+         **_qa_common},
+    ])
 
     out = (REPO / outdir) if not Path(outdir).is_absolute() else Path(outdir)
     out.mkdir(parents=True, exist_ok=True)

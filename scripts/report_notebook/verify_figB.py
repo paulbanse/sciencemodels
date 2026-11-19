@@ -32,8 +32,12 @@ ALPHAS = (0.0, 0.5, 1.0)
 PRELOCS = (0.00, 0.02)
 
 
-def _load() -> pd.DataFrame:
-    files = sorted(CELLS.glob("cellB_*.csv"))
+def _root(data_root=None) -> Path:
+    return Path(data_root) if data_root is not None else CELLS
+
+
+def _load(data_root=None) -> pd.DataFrame:
+    files = sorted(_root(data_root).glob("cellB_*.csv"))
     frames = []
     for f in files:
         d = pd.read_csv(f)
@@ -58,7 +62,8 @@ def _mean(b: pd.DataFrame, col: str, xi: float, alpha: float, preloc: float,
     return float(v.mean())
 
 
-def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[str]:
+def check(outdir: str = "output/report_notebook_v1", data_root=None,
+          tol: float = 1e-9, qa_check: bool = True) -> list[str]:
     fails: list[str] = []
     out = (REPO / outdir) if not Path(outdir).is_absolute() else Path(outdir)
     sidecar_path = out / f"{FNAME}_data.csv"
@@ -69,10 +74,10 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
         if not p.exists():
             fails.append(f"missing figure file: {p}")
     side = pd.read_csv(sidecar_path)
-    b = _load()
+    b = _load(data_root)
 
     # ---- input counts -------------------------------------------------
-    files = sorted(CELLS.glob("cellB_*.csv"))
+    files = sorted(_root(data_root).glob("cellB_*.csv"))
     if len(files) != 36:
         fails.append(f"cellB files: expected 36, got {len(files)}")
     if len(b) != 720:
@@ -165,6 +170,39 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
     extra = set(ann.index) - set(expected)
     if extra:
         fails.append(f"unexpected annotation rows: {sorted(extra)}")
+
+    # ---- QA re-run: rebuild in a temp dir ------------------------------
+    # The builder runs visual_qa.assert_figure_clean internally, so a
+    # successful rebuild proves the rendered-artist and collision contracts
+    # on the CURRENT data root; the regenerated sidecar must match the
+    # delivered one on every numeric column.
+    if qa_check:
+        import tempfile
+        import figB_sabbaticals_vs_lotteries as FB
+        try:
+            with tempfile.TemporaryDirectory(prefix="qa_figB_") as td:
+                rebuilt = FB.build(outdir=td, data_root=data_root)
+                side2 = pd.read_csv(rebuilt["data_csv"])
+            key = [c for c in ("figure", "panel", "metric", "statistic",
+                               "alpha", "p_reloc", "xi", "landscape")
+                   if c in side.columns and c in side2.columns]
+            if len(side) != len(side2):
+                fails.append(f"QA rebuild: sidecar rows {len(side)} -> {len(side2)}")
+            else:
+                a = side.sort_values(key).reset_index(drop=True)
+                c2 = side2.sort_values(key).reset_index(drop=True)
+                for col in ("value", "ci_lo", "ci_hi"):
+                    if col in a.columns and col in c2.columns:
+                        d = np.abs(a[col].to_numpy(float)
+                                   - c2[col].to_numpy(float))
+                        fin = d[np.isfinite(d)]
+                        if len(fin) and fin.max() > tol:
+                            fails.append(
+                                f"QA rebuild drift on {col}: {fin.max():.3e}")
+        except AssertionError as exc:
+            fails.append(f"visual_qa failed on rebuild: {exc}")
+        except Exception as exc:  # noqa: BLE001
+            fails.append(f"QA rebuild raised: {exc!r}")
     return fails
 
 

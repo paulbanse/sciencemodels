@@ -1,11 +1,10 @@
-"""Independent verification for the Section 4.3/5.2/5.3/6 figure commission.
+"""Independent verification for the figure set (v3).
 
 Recomputes every plotted quantity from the RAW source CSVs and asserts a
 match to ``tol`` (default 1e-9) against each figure's ``*_data.csv`` sidecar,
-verifies expected run/cell counts, and asserts zero clipped or overlapping
-text artists on every figure canvas. Family-level checks live in
-``verify_fig<A-F>.py`` (each exposing ``check(outdir, tol) -> list[str]``;
-an empty list means all checks pass).
+verifies expected run/cell counts, AND re-runs the shared
+``visual_qa.assert_figure_clean`` contract by rebuilding each figure in a
+temporary directory (the builders gate their own ``savefig`` on it).
 
 Usage::
 
@@ -22,6 +21,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import verify_F1_v2
+import verify_F10b_v2
+import verify_F6_v2
+import verify_F8_v3
 import verify_figA
 import verify_figB
 import verify_figC
@@ -30,22 +33,29 @@ import verify_figE
 import verify_figF
 
 FAMILIES = [
+    ("F1_v2", "F1_v2_t1_postbug", verify_F1_v2),
     ("A", "F8_v2_turnover_diagnostics", verify_figA),
+    ("A3", "F8_v3_turnover_diagnostics", verify_F8_v3),
+    ("F6_v2", "F6_v2_two_stage_proxy_failure", verify_F6_v2),
     ("B", "F12_sabbaticals_vs_lotteries", verify_figB),
     ("C", "F9_v2_typology_annealing", verify_figC),
     ("D", "F13_paradigm_refill_regimes", verify_figD),
     ("E", "F10a_m2_choice_to_production", verify_figE),
+    ("F10b_v2", "F10b_v2_m2_visibility_like_for_like", verify_F10b_v2),
     ("F", "F10b_m2_visibility_like_for_like", verify_figF),
 ]
 
 # Commission Section 3.2: expected source run/cell counts overall.
 EXPECTED_COUNTS = {
     "turnover runs": 1080,
+    "turnover_v2 runs": 1520,
     "Arm B runs": 720,
     "typology runs": 480,
     "Arm C runs": 360,
     "Path B v1+v2+off runs": 1800,
     "M2 xi-extension runs": 200,
+    "T1 post-fix runs": 720,
+    "W_v05 post-fix runs": 800,
 }
 
 
@@ -55,6 +65,9 @@ def main(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> int:
         print(f"[{tag}] verifying {name} ...", flush=True)
         try:
             failures = module.check(outdir=outdir, tol=tol)
+        except TypeError:
+            # older verifiers without the tol kwarg
+            failures = module.check(outdir=outdir)
         except Exception as exc:  # a crashed verifier is a failure, never a pass
             failures = [f"verifier raised: {exc!r}"]
         if failures:

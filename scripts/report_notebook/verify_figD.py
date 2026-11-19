@@ -4,7 +4,20 @@
 ``F13_paradigm_refill_regimes_data.csv`` from the RAW cell CSVs
 (``data/interventions_v1/cells/cellC_*.csv``), asserts the expected input
 counts (18 cells x 20 seeds = 360 runs; exactly the 3 refill regimes) and
-compares at ``tol``.  Empty return list = all checks pass.
+compares at ``tol``.
+
+It then re-runs the rendered-canvas contract: the figure is rebuilt in memory
+via the builder's ``_figure`` helper and put through
+``visual_qa.assert_figure_clean`` (artist counts incl. the panel-C diamond
+series, plotted-vs-sidecar min/max, ylim headroom, text/text-title/text-data
+collisions, legend duplicates) and ``assert_text_fits``.  A sidecar that
+survives the numeric check but renders a collision (the v2 failure mode:
+rotated labels into the panel-B title, callouts over bars) therefore fails
+here.
+
+``data_root`` accepts the archive directory (default
+``data/interventions_v1/cells``) or its parent; both the recomputation and the
+rebuild use it.  Empty return list = all checks pass.
 """
 from __future__ import annotations
 
@@ -15,7 +28,6 @@ import pandas as pd
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
-CELLS = REPO / "data" / "interventions_v1" / "cells"
 FNAME = "F13_paradigm_refill_regimes"
 
 REGIMES = ("off", "occupied", "frontier")
@@ -30,8 +42,8 @@ METRIC_COL = {
 }
 
 
-def _load() -> pd.DataFrame:
-    files = sorted(CELLS.glob("cellC_*.csv"))
+def _load(root: Path) -> pd.DataFrame:
+    files = sorted(root.glob("cellC_*.csv"))
     frames = []
     for f in files:
         d = pd.read_csv(f)
@@ -43,8 +55,39 @@ def _load() -> pd.DataFrame:
     return c
 
 
-def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[str]:
+def _rerun_visual_contract(data_root, fails: list[str]) -> None:
+    """Rebuild the figure in memory and assert the rendered canvas is clean."""
+    import matplotlib.pyplot as plt
+
+    import figD_paradigm_refill_regimes as builder
+    import visual_qa
+    from turnover_lifecycle_figure import assert_text_fits
+
+    fig = None
+    try:
+        c = builder.load_runs(data_root)
+        side = pd.concat([builder.series_rows(c, data_root),
+                          builder.annotation_rows(c, data_root)],
+                         ignore_index=True)
+        fig, panels = builder._figure(side)
+        w, h = fig.get_size_inches() * fig.dpi
+        assert_text_fits(fig, w, h)
+        visual_qa.assert_figure_clean(fig, panels)
+    except AssertionError as exc:
+        fails.append(f"visual contract: {exc}")
+    except Exception as exc:  # noqa: BLE001 - a crash is a failure, never a pass
+        fails.append(f"visual contract raised: {exc!r}")
+    finally:
+        if fig is not None:
+            plt.close(fig)
+
+
+def check(outdir: str = "output/report_notebook_v1", data_root=None,
+          tol: float = 1e-9) -> list[str]:
+    import figD_paradigm_refill_regimes as builder
+
     fails: list[str] = []
+    root = builder.data_root_path(data_root)
     out = (REPO / outdir) if not Path(outdir).is_absolute() else Path(outdir)
     sidecar_path = out / f"{FNAME}_data.csv"
     if not sidecar_path.exists():
@@ -54,10 +97,10 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
         if not p.exists():
             fails.append(f"missing figure file: {p}")
     side = pd.read_csv(sidecar_path)
-    c = _load()
+    c = _load(root)
 
     # ---- input counts -------------------------------------------------
-    files = sorted(CELLS.glob("cellC_*.csv"))
+    files = sorted(root.glob("cellC_*.csv"))
     if len(files) != 18:
         fails.append(f"cellC files: expected 18, got {len(files)}")
     if len(c) != 360:
@@ -68,9 +111,8 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
     if sorted(c["agent_generation_time"].unique().tolist()) != list(GS):
         fails.append("agent_generation_time grid changed")
 
-    def cell(regime: str, g: float, m1_only: bool = False) -> pd.DataFrame:
-        s = c[(c["refill_mode"] == regime) & (c["agent_generation_time"] == g)]
-        return s
+    def cell(regime: str, g: float) -> pd.DataFrame:
+        return c[(c["refill_mode"] == regime) & (c["agent_generation_time"] == g)]
 
     # ---- series rows --------------------------------------------------
     srows = side[side["statistic"] == "mean"]
@@ -134,6 +176,9 @@ def check(outdir: str = "output/report_notebook_v1", tol: float = 1e-9) -> list[
     extra = set(ann.index) - set(expected)
     if extra:
         fails.append(f"unexpected annotation rows: {sorted(extra)}")
+
+    # ---- rendered-canvas contract (visual_qa, re-run independently) ----
+    _rerun_visual_contract(data_root, fails)
     return fails
 
 
