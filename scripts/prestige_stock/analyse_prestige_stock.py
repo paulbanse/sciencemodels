@@ -175,11 +175,17 @@ def identity_check(rows, seeds: int = 20):
             continue
         key = cell_key(rec)
         stock = rec["_stock"]
-        # seed id = row order within the cell file; compare full row content
+        # seed id = row order within the cell file; compare full row content.
+        # Exclusions: the active-stock gap (axis-bearing by construction) and
+        # `entry_prestige_stock` itself -- since the axis moved from the
+        # driver's monkeypatch into the constructor (post-CDF-v5), the report
+        # carries the treatment LABEL per row; at g = 0 it must differ while
+        # every dynamics column stays bit-identical.
         by_cell[key].setdefault(stock, []).append(
             tuple(sorted((k, repr(v)) for k, v in rec.items()
-                         if not k.startswith("_") and k != "newcomer_incumbent_gap_active_stock"))
-        )
+                         if not k.startswith("_")
+                         and k not in ("newcomer_incumbent_gap_active_stock",
+                                       "entry_prestige_stock"))))
     mismatches, incomplete = [], []
     for key, per_stock in sorted(by_cell.items()):
         lists = {s: sorted(v) for s, v in per_stock.items()}
@@ -446,6 +452,17 @@ def plot_contrasts(contrasts):
 
 
 def main():
+    import argparse
+    parser = argparse.ArgumentParser(description="analyse prestige-stock sweep")
+    parser.add_argument("--out", default=None,
+                        help="archive dir to analyse (default: data/prestige_stock_v1)")
+    args = parser.parse_args()
+
+    global OUT_DIR, FIG_DIR
+    if args.out:
+        OUT_DIR = Path(args.out)
+        FIG_DIR = OUT_DIR / "figures"
+
     rows, files = load_rows()
     if not rows:
         print("no cell CSVs under", OUT_DIR)

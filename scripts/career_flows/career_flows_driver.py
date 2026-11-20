@@ -75,12 +75,20 @@ def main():
     import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("--sweep", choices=["A", "B", "both"], default="both")
+    ap.add_argument("--out", default=None,
+                    help="output dir (default: data/career_flows_v1)")
+    ap.add_argument("--sweep-b-landscapes", default=None,
+                    help="comma list overriding sweep B landscapes "
+                         "(brief v2: mgstd5,noisypr5)")
     args = ap.parse_args()
 
     t_start = time.time()
-    cp_path = os.path.join(OUT, "checkpoint.json")
-    log_path = os.path.join(OUT, "run_log.txt")
-    checkpoint = {"schema": "career_flows_v1", "cells": {}}
+    out_dir = args.out or OUT
+    os.makedirs(out_dir, exist_ok=True)
+    cp_path = os.path.join(out_dir, "checkpoint.json")
+    log_path = os.path.join(out_dir, "run_log.txt")
+    checkpoint = {"schema": "career_flows_" + os.path.basename(
+        os.path.normpath(out_dir)), "cells": {}}
     if os.path.isfile(cp_path):
         with open(cp_path) as f:
             checkpoint = json.load(f)
@@ -149,10 +157,10 @@ def main():
             rows = sum(len(f) for f in frames)
             if frames:
                 pd.concat(frames, ignore_index=True).to_csv(
-                    os.path.join(OUT, f"{tag}.csv"), index=False)
+                    os.path.join(out_dir, f"{tag}.csv"), index=False)
             if career_frames:
                 pd.concat(career_frames, ignore_index=True).to_csv(
-                    os.path.join(OUT, f"{tag}_career.csv"), index=False)
+                    os.path.join(out_dir, f"{tag}_career.csv"), index=False)
             status = "ok" if not errors else ("ok_with_failures" if frames else "crashed")
             entry = {
                 "sweep": sweep_name, "status": status,
@@ -178,16 +186,21 @@ def main():
                 f"wall={entry['wall_s']}s"
                 + (f" ERRORS={list(errors)}" if errors else ""))
 
+    spec_b = dict(SWEEP_B)
+    if args.sweep_b_landscapes:
+        spec_b["landscapes"] = [s.strip() for s in
+                                args.sweep_b_landscapes.split(",") if s.strip()]
     if args.sweep in ("A", "both"):
         log(f"sweep A start (confirmation, h400, 40 seeds, n_jobs=3): "
             f"{len(SWEEP_A['curiosity'])*len(SWEEP_A['landscapes'])} cells x "
             f"{len(SWEEP_A['seeds'])} seeds")
         run_sweep(SWEEP_A, "A", need_agent_vars=False)
     if args.sweep in ("B", "both"):
-        log(f"sweep B start (career flows, h200, 20 seeds, n_jobs=3): "
-            f"{len(SWEEP_B['gen_time'])*len(SWEEP_B['curiosity'])} cells x "
-            f"{len(SWEEP_B['seeds'])} seeds")
-        run_sweep(SWEEP_B, "B", need_agent_vars=True)
+        log(f"sweep B start (career flows, h200, 20 seeds, n_jobs=3, "
+            f"landscapes={spec_b['landscapes']}): "
+            f"{len(spec_b['gen_time'])*len(spec_b['curiosity'])*len(spec_b['landscapes'])} cells x "
+            f"{len(spec_b['seeds'])} seeds")
+        run_sweep(spec_b, "B", need_agent_vars=True)
 
     cells = checkpoint["cells"]
     log(f"driver done: {len(cells)} cells checkpointed, total_wall={time.time()-t_start:.1f}s")

@@ -170,9 +170,46 @@ def install_stock_selector() -> None:
     MyModel._MyModel__generate_new_agents = _patched_generate_new_agents
 
 
+# NOTE (2026-11-20, post-CDF-v5): install_stock_selector/restore_model and the
+# patched body above are RETIRED for sweeping -- the model owns
+# `entry_prestige_stock` and verify_model_selector() guards it. They remain
+# only for probe_prestige_stock.py's legacy identity proof, which must be
+# re-derived separately (it still raises loudly via the canary above).
+
+
 def restore_model() -> None:
     """Put the model's own method back (used by the probe's identity proof)."""
     MyModel._MyModel__generate_new_agents = _ORIG_SUPERVISOR_BLOCK
+
+
+def verify_model_selector() -> None:
+    """The model owns `entry_prestige_stock` now (cdf v4/v5): verify, don't patch.
+
+    The driver-side monkeypatch below is retired for sweeping; this guard
+    fails loudly if the model's selector semantics drift again.
+    """
+    global _DIVERGENCE_CANARY
+    params = inspect.signature(MyModel.__init__).parameters
+    src = inspect.getsource(MyModel._MyModel__generate_new_agents)
+    ok = (
+        "entry_prestige_stock" in params
+        and "entry_stock = self.entry_prestige_stock" in src
+        and src.count("getattr(a, entry_stock)") == 2
+    )
+    if not ok:
+        raise RuntimeError(
+            "model no longer owns a verifiable entry_prestige_stock selector "
+            f"(param={'entry_prestige_stock' in params}, "
+            f"getattr reads={src.count('getattr(a, entry_stock)')}): "
+            "re-derive scripts/prestige_stock/run_prestige_stock_sweep.py "
+            "against the current model before sweeping."
+        )
+    _DIVERGENCE_CANARY = {
+        "model_owns_selector": True,
+        "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "note": "driver-side monkeypatch retired; axis passed as the "
+                "entry_prestige_stock constructor parameter",
+    }
 
 
 # --- report wrapper (model does not report ideal merit / final wedge / gap) --
@@ -182,9 +219,13 @@ _ORIG_BUILD_REPORT = _io.build_report
 def _welfare_build_report(model):
     row = _ORIG_BUILD_REPORT(model)
     df = model.datacollector.get_model_vars_dataframe()
+    # BUG-0006 convention (metrics.py): finite-part over agents -- unscored
+    # step-t newborns carry ideal_Merit = NaN and must not poison the sums
     merits = [float(a.ideal_Merit) for a in model.agents]
-    row["ideal_merit_sum"] = float(np.sum(merits))
-    row["ideal_merit_mean"] = float(np.mean(merits))
+    finite = [m for m in merits if np.isfinite(m)]
+    row["ideal_merit_sum"] = float(np.sum(finite)) if finite else float("nan")
+    row["ideal_merit_mean"] = float(np.mean(finite)) if finite else float("nan")
+    row["n_unscored_final_step"] = len(merits) - len(finite)
     row["corr_prestige_ideal_merit_final"] = float(
         df["Corr_prestige_ideal_merit"].iloc[-1]
     )
@@ -267,6 +308,7 @@ def param_grid_for(cell) -> dict:
         {
             "initial_curiosity": cell["initial_curiosity"],
             "agent_generation_time": cell["agent_generation_time"],
+            "entry_prestige_stock": cell["entry_prestige_stock"],
             "cell_init_function": cell_init,
             "generation_params": generation_params,
         }
@@ -298,8 +340,11 @@ def is_done(cell, seeds: int) -> bool:
 
 def run_cell(cell, seeds: int) -> dict:
     # joblib ships task bodies by value and does not re-execute this module in
-    # the worker, so both patches are installed from inside the task
-    install_stock_selector()
+    # the worker, so both patches are installed from inside the task.
+    # The driver-side stock monkeypatch is RETIRED: the model owns
+    # `entry_prestige_stock` now (passed via param_grid_for); only the report
+    # wrapper is still installed here. ACTIVE_STOCK remains for the wrapper's
+    # active-stock gap column.
     install_report_wrapper()
     ACTIVE_STOCK["attr"] = cell["entry_prestige_stock"]
 
@@ -356,7 +401,16 @@ def main() -> int:
     parser.add_argument("--seeds", type=int, default=SEEDS)
     parser.add_argument("--n-jobs", type=int, default=3)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--out", default=None,
+                        help="output dir (default: data/prestige_stock_v1)")
     args = parser.parse_args()
+
+    global OUT_DIR, STATE_DIR, FIG_DIR, LOG_PATH
+    if args.out:
+        OUT_DIR = Path(args.out)
+        STATE_DIR = OUT_DIR / "state"
+        FIG_DIR = OUT_DIR / "figures"
+        LOG_PATH = OUT_DIR / "run_log.txt"
 
     seeds = 2 if args.probe else args.seeds
     n_jobs = min(args.n_jobs, 3)
@@ -365,9 +419,9 @@ def main() -> int:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     FIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    install_stock_selector()
+    verify_model_selector()
     design = {
-        "run": "prestige_stock_v1",
+        "run": OUT_DIR.name,
         "written_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "not_calibrated": True,
         "axis": "entry_prestige_stock (supervisor-roulette weight)",
