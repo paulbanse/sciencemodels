@@ -352,14 +352,14 @@ def _draw(frames, texts, sidecar, png: Path, pdf: Path,
     # ---------------- footnotes ------------------------------------------
     foot = [
         textwrap.fill(
-            "Source: data/bug0006_remeasure_v2/t1_runs.csv (720 post-fix runs = "
+            "Source: data/bug0006_remeasure_v2/t1_runs.csv (720 runs = "
             "2 entry rates x 3 curiosity x 3 vanishing x 2 landscapes x 20 "
             "seeds). M0 = g 0 (no entry), M1 = g 0.1. Hue = landscape, fill = "
             "entry regime (hatched/hollow = M0, solid = M1). Every plotted "
             "value, CI and annotation is computed from the raw CSV and stored in "
             f"{BASENAME}_data.csv.", width=150),
         textwrap.fill(
-            "BUG-0006 (fixed): newborns no longer enter the data collector with "
+            "Measurement note: newborns no longer enter the data collector with "
             "prestige = 0, ideal_Merit = 0; correlation_reporter drops the "
             "non-finite pairs. Panel (b) therefore reads the terminal step as "
             "measured, and a negative cell is a genuine misalignment of the "

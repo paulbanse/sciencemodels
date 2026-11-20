@@ -113,10 +113,10 @@ def build():
     # collided with the y-axis label (same ghost-tick pattern as F4)
     ax.set_yticks([0.0, 0.02, 0.04, 0.06, 0.08, 0.10, 0.12])
     T._cosmetics(ax, s,
-                 "BUG-0006 moved the ideal-side levels; "
-                 "local side and top-10 untouched",
-                 "T1 cell measure (720 seed-matched pairs)",
-                 "mean paired delta (post-fix \u2212 pre-fix), 95% CI")
+                 "Metric invariance audit: ideal-side levels move; "
+                 "local side and top-10 stay exactly zero",
+                 "T1 cell measure (720 pairs; bars = 95% CI)",
+                 "mean paired delta (corrected \u2212 early-draft)")
 
     note = textwrap.fill(
         f"source: data/bug0006_remeasure_v2/t1_runs.csv paired against "

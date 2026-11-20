@@ -136,7 +136,7 @@ def build():
     # (same pattern as F4/F5)
     ax.set_yticks([-0.02, 0.0, 0.02, 0.04, 0.06, 0.08, 0.10])
     T._cosmetics(ax, s,
-                 f"Post-fix wedge: same stock axis, {ratio:.0f}x lower levels",
+                 f"The wedge barely moves with the stock choice; {ratio:.0f}x below the early draft",
                  "entry 0.1 cell (curiosity x landscape legibility)",
                  "relational wedge (c_local - c_ideal), final step")
     ax.legend(loc="upper left", fontsize=s["tick_size"] - 1, frameon=False)
@@ -145,12 +145,12 @@ def build():
         "source: data/prestige_stock_v2/summary_cell.csv (36 cells x 20 "
         "seeds = 720 runs, H = 200; analyse_prestige_stock.py --out "
         "data/prestige_stock_v2), entry-on cells only; wedge = c_local - "
-        f"c_ideal. Levels: v1 entry-on mean {lvl1:.3f} -> v2 {lvl2:.3f} "
-        f"({ratio:.0f}x lower): the pre-fix level carried the birth-step "
+        f"c_ideal. Levels: early-draft {lvl1:.3f} -> current {lvl2:.3f} "
+        f"({ratio:.0f}x lower): the early-draft level carried the newborn-measurement "
         "artifact in c_ideal. Cross-stock cell ordering (12 cells, "
-        f"wedge_rank_agreement): v1 rho {r1_lo:.3f}-{r1_hi:.3f} -> v2 rho "
-        f"{r2_lo:.3f}-{r2_hi:.3f}; v1-vs-v2 entry-on rho {rho_v1v2:.3f} "
-        "-- ordering loosens post-fix, it is NOT preserved at >0.95. "
+        f"wedge_rank_agreement): early-draft rho {r1_lo:.3f}-{r1_hi:.3f} -> current rho "
+        f"{r2_lo:.3f}-{r2_hi:.3f}; cross-archive entry-on rho {rho_v1v2:.3f} "
+        "-- ordering loosens relative to the early draft. "
         f"g=0 identity: {bad} mismatches. Model-internal, NOT calibrated.",
         width=150)
     fig.text(0.006, 0.012, note, fontsize=s["note_size"],

@@ -613,7 +613,7 @@ def build_figure(data_root=None):
     fig.subplots_adjust(left=0.062, right=0.988, top=0.845, bottom=0.40,
                         wspace=0.21)
     fig.text(0.5, 0.955,
-             "F6_v2 · Two-stage proxy failure after BUG-0006 — macro harvest and "
+             "F6_v2 · Two-stage proxy failure — macro harvest and "
              "strictly like-for-like time-mean alignment across five tiers "
              "(mgstd5)",
              ha="center", va="top",
@@ -690,11 +690,11 @@ def build_figure(data_root=None):
         "Stage 1 (ξ ≤ 0.6), welfare kink [0.6, 0.8], Stage 2 (ξ ≥ 0.8) are shaded "
         "regions only — no boundary rule crosses a series. Panel B uses the SAME "
         "statistic in every arm (time-mean c_ideal_tm), so no time-mean / final-step "
-        f"mixing can distort the hierarchy. BUG-0006 moved this statistic by "
+        f"mixing can distort the hierarchy. The measurement correction moved this statistic by "
         f"{A['bug0006_m1_mgstd5_c_tm_mean_delta']:+.4f} (M1, mgstd5) and "
         f"{A['bug0006_m2_c_tm_mean_delta']:+.4f} (M2) while the M0 control is "
         f"unchanged (max |Δ| = {A['bug0006_m0_c_tm_max_abs_diff']:.1e}); the "
-        "pre-fix F6 is therefore superseded. Model-internal, not calibrated "
+        "the early-draft F6 is therefore superseded. Model-internal, not calibrated "
         "(owner ruling 2026-11-13).",
     ]
     note = fig.text(0.008, 0.006, "\n".join(textwrap.fill(t, width=178)

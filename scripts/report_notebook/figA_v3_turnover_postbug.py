@@ -129,7 +129,7 @@ PRE_TRAJ_GLOB = "data/turnover_v1/traj/cell_*.csv"
 #: sidecar metric names -- ONE metric per panel (the rendered-artist data
 #: contract of visual_qa checks a panel against a single metric name)
 M_A = "c_ideal (per-step mean across the 18 cells of the mode)"
-M_GHOST = "c_ideal (age_hazard sync: pre-fix ghost vs post-fix)"
+M_GHOST = "c_ideal (age_hazard sync: early-draft ghost vs corrected)"
 M_B = "c_ideal (settled mean over steps 301-400)"
 M_C = "gap_recent_mean_last100 (pooled bar and per-landscape markers)"
 M_D = "native share (harvested_fin, top10 at step 399, top10_fin at step 400)"
@@ -261,7 +261,7 @@ def note_spike(spike: float, staggered: float) -> str:
 
 
 def label_ghost(pre400: float, post400: float) -> str:
-    return f"t=400: pre-fix {pre400:+.3f} → post-fix {post400:+.3f}"
+    return f"t=400: early-draft {pre400:+.3f} → corrected {post400:+.3f}"
 
 
 def label_equality() -> str:
@@ -341,7 +341,7 @@ def compute(data_root=None):
             add_plot("a_inset", M_GHOST, series, value=getattr(r, col),
                      n=18, exit_mode=GHOST_MODE, step=int(r.step),
                      source_file=src,
-                     note="mean across the 18 cells; pre-fix = BUG-0006 unfixed")
+                     note="mean across the 18 cells; early-draft = pre-correction measurement")
     pre400 = float(pre_ghost.loc[400])
     post400 = float(post_ghost.loc[400])
     add_annotation("a_inset", "annotation: pre_fix_step400", value=pre400,
@@ -567,14 +567,14 @@ def _draw(frames, texts, sidecar, png: Path, pdf: Path,
     axin.axhline(0.0, color=PALETTE["gray_light"], linewidth=0.8, zorder=1)
     axin.plot(ghost["step"], ghost["pre_fix"], color=PALETTE["gray"],
               linewidth=1.0, linestyle="--", zorder=3,
-              label="pre-fix (BUG-0006 unfixed)")
+              label="early-draft (pre-correction)")
     axin.plot(ghost["step"], ghost["post_fix"], color=MODE_COLOR[GHOST_MODE],
-              linewidth=1.1, zorder=4, label="post-fix")
+              linewidth=1.1, zorder=4, label="corrected")
     axin.set_xlim(GHOST_START, 408)
     axin.set_ylim(-0.95, 0.30)
     axin.set_yticks([-0.5, 0.0])
     axin.set_xticks([200, 300, 400])
-    axin.set_title("pre-fix vs post-fix (age_hazard_sync)",
+    axin.set_title("early-draft vs corrected (age_hazard_sync)",
                    fontsize=5.8, pad=1.6)
     axin.set_ylabel("c_ideal", fontsize=6.0, labelpad=1.5)
     axin.set_xlabel("step t", fontsize=6.0, labelpad=1.0)
@@ -700,7 +700,7 @@ def _draw(frames, texts, sidecar, png: Path, pdf: Path,
             "carry. Inset ghost: data/turnover_v1/traj/cell_*.csv (read-only).",
             width=196),
         textwrap.fill(
-            "BUG-0006 (fixed): newborns used to enter the data collector with "
+            "Measurement note: newborns used to enter the data collector with "
             "prestige = 0, ideal_Merit = 0, so every birth step carried an "
             "artificial 0-vs-optimum pair; the tau_max = 200 synchronized cohort "
             "replacement at t = 200, 400 amplified it. Post-fix newborn ideal "

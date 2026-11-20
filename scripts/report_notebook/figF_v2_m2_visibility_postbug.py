@@ -252,7 +252,7 @@ def annotation_rows(series: pd.DataFrame, pins: dict,
                  & (delta["metric"] == "c_ideal_tm")]
     _require(len(d_tm) == 1, "m2_xi_bug0006_delta: c_ideal_tm row")
     add("b", "bug0006_m2_c_tm_delta", float(d_tm["mean_delta"].iloc[0]),
-        "BUG-0006 mean change in time-mean alignment over all 200 M2 runs "
+        "Measurement-correction mean change in time-mean alignment over all 200 M2 runs "
         "(tables/m2_xi_bug0006_delta.csv)")
     dw = pd.read_csv(data_root_path(data_root) / "tables"
                      / "w_v05_bug0006_delta.csv")
@@ -292,7 +292,7 @@ def build_figure(data_root=None):
                         wspace=0.26)
     fig.text(0.5, 0.958,
              "F10b_v2 · M2 (pull = 1.0, logit + equal_split) on the full visibility "
-             "axis — strictly like-for-like time-mean alignment, post-BUG-0006 "
+             "axis — strictly like-for-like time-mean alignment "
              "(mgstd5)",
              ha="center", va="top", fontsize=HOUSE_STYLE["title_size"] + 1)
 
@@ -385,10 +385,10 @@ def build_figure(data_root=None):
         f"Vanishing-factor pins (read from the archives): M0/M1 "
         f"{pins[M0_TIER]['vanishing']:g} (w_v05), M2 λ = 0/1 "
         f"{pins[M2_TIERS[0.0]]['vanishing']:g} (m2_xi). Panel A plots harvested_fin for "
-        "every tier — the post-fix archives expose one uniform statistic (identical "
-        "to the pre-fix percentage_knowledge_harvested; the remeasure leaves harvest "
+        "every tier — the corrected archives expose one uniform statistic (identical "
+        "to the early-draft percentage_knowledge_harvested; the remeasure leaves harvest "
         f"invariant, max |Δ| = {A['bug0006_w_v05_harvest_max_abs_diff']:.1e}).",
-        f"BUG-0006 moved the M2 time-mean alignment by "
+        f"The measurement correction moved M2 time-mean alignment by "
         f"{A['bug0006_m2_c_tm_delta']:+.4f} on average over its 200 runs "
         "(tables/m2_xi_bug0006_delta.csv) and the M1 (g = 0.1) rows by "
         f"{A['bug0006_w_v05_m1_mgstd5_c_tm_mean_delta']:+.4f} on mgstd5 (max |Δ| "
@@ -396,7 +396,7 @@ def build_figure(data_root=None):
         "dropped unscored step-t newborns from the correlation; the M0 (g = 0) "
         f"control is unchanged (max |Δ| = "
         f"{A['bug0006_w_v05_m0_c_tm_max_abs_diff']:.1e}). Panel B therefore "
-        "supersedes the pre-fix hierarchy. Zero is a y-tick plus the reference "
+        "supersedes the early-draft hierarchy. Zero is a y-tick plus the reference "
         "rule — no stray label; the Stage 1 / kink / Stage 2 bands are shaded "
         "regions only, so no boundary rule crosses the series or the annotation. "
         "Klann team size 2.65: Empirical benchmark (unfitted). Model-internal, "

@@ -129,7 +129,7 @@ def build():
         f"c={r.curiosity:.1f} {r.m0_level:+.4f}/{r.exact_level:+.4f}/"
         f"{r.random_level:+.4f}" for r in df.itertuples())
     note = textwrap.fill(
-        "source: interventions_v2 arm_a_spawn.csv (post-fix exact/random, "
+        "source: interventions_v2 arm_a_spawn.csv (exact/random levels, "
         "g = 0.1, n = 20/cell) + runs.csv M0 (arm C, g = 0, refill off, "
         "n = 20/c); shares = starvation (random-exact)/(M0-exact), herding "
         "(M0-random)/(M0-exact), sum = 100% asserted. M0/exact/random: "

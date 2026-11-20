@@ -65,7 +65,7 @@ POST_RUNS = "data/turnover_v2/runs.csv"
 PRE_TRAJ_GLOB = "data/turnover_v1/traj/cell_*.csv"
 
 M_A = "c_ideal (per-step mean across the 18 cells of the mode)"
-M_GHOST = "c_ideal (age_hazard sync: pre-fix ghost vs post-fix)"
+M_GHOST = "c_ideal (age_hazard sync: early-draft ghost vs corrected)"
 M_B = "c_ideal (settled mean over steps 301-400)"
 M_C = "gap_recent_mean_last100 (pooled bar and per-landscape markers)"
 M_D = "native share (harvested_fin, top10 at step 399, top10_fin at step 400)"
@@ -143,7 +143,7 @@ def note_spike(spike: float, staggered: float) -> str:
 
 
 def label_ghost(pre400: float, post400: float) -> str:
-    return f"t=400: pre-fix {pre400:+.3f} → post-fix {post400:+.3f}"
+    return f"t=400: early-draft {pre400:+.3f} → corrected {post400:+.3f}"
 
 
 # --- expected sidecar (recomputed from the raw CSVs) -----------------------
@@ -188,11 +188,11 @@ def _expected() -> pd.DataFrame:
         add("a_inset", M_GHOST, "pre_fix_ghost", "mean", pre_ghost.loc[step],
             np.nan, np.nan, 18, exit_mode=GHOST_MODE, step=step,
             source_file=PRE_TRAJ_GLOB,
-            note="mean across the 18 cells; pre-fix = BUG-0006 unfixed")
+            note="mean across the 18 cells; early-draft = pre-correction measurement")
         add("a_inset", M_GHOST, "post_fix", "mean", post_ghost.loc[step],
             np.nan, np.nan, 18, exit_mode=GHOST_MODE, step=step,
             source_file=POST_TRAJ_GLOB,
-            note="mean across the 18 cells; pre-fix = BUG-0006 unfixed")
+            note="mean across the 18 cells; early-draft = pre-correction measurement")
     pre400 = float(pre_ghost.loc[400])
     post400 = float(post_ghost.loc[400])
     add("a_inset", "annotation: pre_fix_step400", "annotation", "annotation",

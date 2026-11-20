@@ -125,10 +125,10 @@ def build():
             if land in v1:
                 m = v1[land]
                 parts.append(f"{land} " + "/".join(f"{m[g]:+.3f}" for g in G_LEVELS))
-        v1txt = (" Pre-fix v1 curiosity-averaged means: "
-                 + "; ".join(parts) + " (zero-padding artifact).")
+        v1txt = (" Early-draft curiosity-averaged means: "
+                 + "; ".join(parts) + " (newborn-measurement artifact).")
     note = textwrap.fill(
-        "source: data/career_flows_v2/careerB_*.csv (post-fix re-run of "
+        "source: data/career_flows_v2/careerB_*.csv (re-run of "
         "sweep B: g x c x landscape x 20 seeds = 360 runs, H = 200, "
         "vanishing 0.9), final step, curiosity-averaged (pooled 60 runs "
         "per point, 95% CI = mean +/- 1.96 SE). VERIFICATION: all mgstd5 "
