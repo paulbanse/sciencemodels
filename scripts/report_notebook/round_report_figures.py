@@ -204,11 +204,13 @@ def figure_remeasure_delta(outdir: Path | str | None = None):
 # --------------------------------------------------------------------------
 # F7 -- M0 cognitive division of labour: diversity buys alignment, not speed
 # --------------------------------------------------------------------------
-F7_STEM = "F7_m0_cognitive_division_of_labor"
+F7_STEM = "F7_v2_m0_cognitive_division_of_labor"
 
-#: Arms in appearance order: the two substantive cohorts, then the pooled
-#: sweep reference. Assigned explicitly so no sort decides which arm is purple.
-F7_ARMS_A = ("mixed", "homogeneous", "sweep average")
+#: Arms in appearance order: the two substantive cohorts only. The pooled
+#: sweep reference was removed in the v2 streamline (owner brief
+#: 2026-11-19): an average over populations is not a cohort, and Panel A
+#: must read as the matched mixed-vs-homogeneous comparison it is.
+F7_ARMS_A = ("mixed", "homogeneous")
 F7_ARMS_B = ("mixed", "homogeneous")
 
 
@@ -257,16 +259,16 @@ def _f7_panel(ax, wide: pd.DataFrame, lands: list[str], arms: tuple[str, ...],
 
 
 def figure_cognitive_division_of_labor(outdir: Path | str | None = None):
-    """F7 -- the two M0 claims of the sketch, drawn against their artifacts.
+    """F7_v2 -- the two M0 claims of the sketch, drawn against their artifacts.
 
     Panel A is the sketch's "early breakthrough acceleration" claim and Panel B
     its "merit-prestige alignment" claim, both measured on the same four
     landscape pairs so the reader can see that the second survives and the
     first does not: the matched comparison (mixed vs the swept file's mu=0.5
     cohort) shows no speed-up, while the alignment gain is large on MultG2 and
-    reverses on Noisy2. The pooled sweep average -- the only comparator under
-    which a 2.6x ratio exists -- is drawn as a hatched grey reference so the
-    sketch's number can be located rather than restated.
+    reverses on Noisy2. v2 (owner brief 2026-11-19) removes the pooled sweep
+    average from Panel A -- only `mixed` vs `homogeneous` remain, matching
+    Panel B -- and asserts exactly two bars per landscape.
     """
     tidy, caps = D.m0_division_of_labor()
     lands = list(D.M0_FILES)
@@ -311,11 +313,10 @@ def figure_cognitive_division_of_labor(outdir: Path | str | None = None):
         "source: data/figures_v1/run_number0-7.csv — the 8 canonical BULK_SETUPS, "
         f"{D.M0_REPEATS} repeats per cell, step_limit 200. mixed: newcomers draw "
         "c ~ U(0,1) (files 1/3/5/7). homogeneous: the swept file (0/2/4/6) at "
-        "μ = 0.5, where newcomers inherit c = 0.5. Grey hatched: all 11 swept "
-        "cohorts pooled (μ = 0, .1, …, 1) — an average over populations, not a "
-        "cohort, and the only comparator under which the sketch's 2.6× exists "
-        f"(censored at μ ≤ 0.1: {caps['reach']['MultG2|sweep average']['censored']}/110 "
-        "runs on MultG2 never reach 10 %). × under a landscape = steps ratio "
+        "μ = 0.5, where newcomers inherit c = 0.5. Both panels compare only "
+        "these two matched cohorts (v2: the pooled 11-point sweep reference "
+        "was removed — an average over populations is not a cohort). "
+        "× under a landscape = steps ratio "
         "homogeneous/mixed; Δ = mixed minus homogeneous. No MultG2_no_dist artifact "
         "exists in the repo (no sweep ran use_distance=False), so the fourth pair is "
         "randominit. Model-internal, no empirical calibration.",
@@ -323,6 +324,15 @@ def figure_cognitive_division_of_labor(outdir: Path | str | None = None):
     fig.text(0.006, 0.012, note, fontsize=s["note_size"], color=T.PALETTE["gray"],
              va="bottom", linespacing=1.45)
     fig.tight_layout(rect=(0, 0.195, 1, 1))
+
+    # v2 contract: Panel A carries exactly two bars per landscape
+    import visual_qa
+    n_bars_a = sum(len(bc.patches) for bc in
+                   visual_qa.collect_panel_artists(axA)["bars"])
+    assert n_bars_a == 2 * len(lands), (
+        f"Panel A must show 2 bars per landscape, found {n_bars_a} "
+        f"for {len(lands)} landscapes")
+
     fig.savefig(out, dpi=s["dpi"])
     pdf = out.with_suffix(".pdf")
     fig.savefig(pdf)
@@ -335,8 +345,6 @@ def figure_cognitive_division_of_labor(outdir: Path | str | None = None):
         extra += [
             {"landscape": land, "arm": "homogeneous/mixed", "metric": "ratio_h10_steps",
              "value": r["homog_over_mixed"], "kind": "annotated"},
-            {"landscape": land, "arm": "sweep/mixed", "metric": "ratio_h10_steps",
-             "value": r["sweep_over_mixed"], "kind": "annotated"},
             {"landscape": land, "arm": "mixed-homogeneous", "metric": "delta_c_ideal",
              "value": caps["deltas"][land], "kind": "annotated"},
             {"landscape": land, "arm": "mixed-homogeneous", "metric": "harvest_gap_pp",
@@ -344,6 +352,18 @@ def figure_cognitive_division_of_labor(outdir: Path | str | None = None):
         ]
     export = pd.concat([export, pd.DataFrame(extra)], ignore_index=True)
     csv_path = T.write_figure_data(export, out)
+
+    # v2 visual QA on the rendered canvas (drawn arms only)
+    qa_a = export[(export["metric"] == "h10_steps")
+                  & (export["arm"].isin(F7_ARMS_A))].copy()
+    qa_a["metric"] = "f7a"
+    qa_b = export[(export["metric"] == "c_ideal")
+                  & (export["arm"].isin(F7_ARMS_B))].copy()
+    qa_b["metric"] = "f7b"
+    visual_qa.assert_figure_clean(fig, [
+        {"ax": axA, "metric": "f7a", "expect_bars": 8, "sidecar": qa_a},
+        {"ax": axB, "metric": "f7b", "expect_bars": 8, "sidecar": qa_b},
+    ])
     return fig, out, {"caps": caps, "csv": csv_path, "pdf": pdf}
 
 
