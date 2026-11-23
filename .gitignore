@@ -19,7 +19,7 @@ ruff.toml
 
 # 🐍 Automatisch erzeugte Python-Cache-Dateien
 __pycache__/
-data/
+data/*
 *.py[cod]
 
 # 📓 Jupyter Notebook Checkpoints (Zwischenspeicher)
@@ -45,3 +45,16 @@ data/
 *.jpeg
 *.svg
 *.pdf
+
+# -----------------------------------------------------------
+# Ausnahme (owner ruling 2026-11-23): Publikationsfiguren als
+# PNG werden versioniert, damit die Markdown-Dokumente (Paper,
+# Reports, CONT-Einträge) auf jedem System die Bilder zeigen.
+# Zahlen (CSV) und Druck-PDFs bleiben generiert und ignoriert.
+# -----------------------------------------------------------
+!output/report_notebook_v1/*.png
+data/*
+!data/*/
+data/*/*
+!data/*/figures/
+!data/*/figures/*.png

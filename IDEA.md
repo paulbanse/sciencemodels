@@ -90,7 +90,11 @@ here.
   `python tests/test_smoke.py`.
 - Notebooks via Jupyter; analysis reads CSVs from `data/`.
 - Data is tracked: none. `data/`, `*.csv`, `*.pdf`, `__pycache__/` are
-  gitignored; the literature corpus and documentation are tracked.
+  gitignored; the literature corpus and documentation are tracked. Exception
+  (owner ruling 2026-11-23): figure PNGs --- `output/report_notebook_v1/*.png`
+  and `data/*/figures/*.png` --- are versioned so every markdown document
+  renders its pictures on any clone; CSVs and compiled PDFs stay generated
+  and ignored.
 - Required environment variables or credentials: none.
 - Container-wide inventory (Nix, Julia, uv) deliberately not repeated; it
   lives in `/workspace/AGENTS.md`.

@@ -117,7 +117,7 @@ Three measurement facts govern the interpretation:
 
 # Welfare curves
 
-![Welfare curves: each outcome against visibility weight, one line per entry rate and landscape leg, mean $\pm$ 1.96 SE over 20 seeds](../data/welfare_v1/figures/welfare_curves.png)
+![Welfare curves: each outcome against visibility weight, one line per entry rate and landscape leg, mean $\pm$ 1.96 SE over 20 seeds](../../data/welfare_v1/figures/welfare_curves.png)
 
 The table prices visibility pressure directly: the within-seed slope of each
 of the eight series, per unit of $1-c$, for three of the six outcomes drawn
@@ -231,7 +231,7 @@ and every number above was recomputed after the fix.
 
 # Phase diagram
 
-![Phase diagram: mean ideal-merit loss per agent across visibility weight and entry rate, split by landscape leg and by the visibility reward](../data/welfare_v1/figures/phase_diagram.png)
+![Phase diagram: mean ideal-merit loss per agent across visibility weight and entry rate, split by landscape leg and by the visibility reward](../../data/welfare_v1/figures/phase_diagram.png)
 
 The surface is drawn per agent, for the reason given above: entry changes
 the population, so the total is not comparable across the entry rows.
@@ -256,7 +256,7 @@ the population, so the total is not comparable across the entry rows.
 - No cell is blank: all 40 combinations of weight, entry, reward and leg are
   present, each averaged over 20 seeds.
 
-![Collapse-threshold probe: seed-level welfare-loss scatter with the fitted response, and the bootstrap breakpoint interval for every series that passes the test](../data/welfare_v1/figures/collapse_threshold.png)
+![Collapse-threshold probe: seed-level welfare-loss scatter with the fitted response, and the bootstrap breakpoint interval for every series that passes the test](../../data/welfare_v1/figures/collapse_threshold.png)
 
 # Gross versus net
 

@@ -271,9 +271,9 @@ newcomers --- and hence how fast the wedge forms --- but the *geography* of
 where it opens is a property of entry, visibility weight and landscape
 legibility, not of which prestige stock the community treats as the signal.
 
-![Wedge matrix: cell mean wedge for each prestige stock, split by final step and time-mean](../data/prestige_stock_v1/figures/wedge_matrix.png)
+![Wedge matrix: cell mean wedge for each prestige stock, split by final step and time-mean](../../data/prestige_stock_v1/figures/wedge_matrix.png)
 
-![Paired stock effects within the entry-on cells, 95% bootstrap intervals over 20 seeds](../data/prestige_stock_v1/figures/stock_effects.png)
+![Paired stock effects within the entry-on cells, 95% bootstrap intervals over 20 seeds](../../data/prestige_stock_v1/figures/stock_effects.png)
 
 # Gross versus net
 
