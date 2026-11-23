@@ -50,7 +50,7 @@ data/*
 # Ausnahme (owner ruling 2026-11-23): Publikationsfiguren als
 # PNG werden versioniert, damit die Markdown-Dokumente (Paper,
 # Reports, CONT-Einträge) auf jedem System die Bilder zeigen.
-# Zahlen (CSV) und Druck-PDFs bleiben generiert und ignoriert.
+# Zahlen (CSV) bleiben generiert und ignoriert.
 # -----------------------------------------------------------
 !output/report_notebook_v1/*.png
 data/*
@@ -58,3 +58,19 @@ data/*
 data/*/*
 !data/*/figures/
 !data/*/figures/*.png
+
+# -----------------------------------------------------------
+# PDF-Ausnahme (owner ruling 2026-11-23): Figure-PDFs (Vektor-
+# kompanions der getrackten PNGs) und die kompilierten PDFs
+# getrackter Markdown-Dokumente werden versioniert. NICHT
+# versioniert: der Literaturkorpus in context/ (Drittanbieter-
+# Verlags-PDFs, Urheberrecht) und alles andere Generierte.
+# -----------------------------------------------------------
+!output/report_notebook_v1/*.pdf
+!data/*/figures/*.pdf
+!AdmiralsLog/*.pdf
+!AdmiralsLog/*/*.pdf
+!docs/*.pdf
+!drafts/*.pdf
+!drafts/archive/*.pdf
+!output/reports/*.pdf

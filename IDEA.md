@@ -90,11 +90,12 @@ here.
   `python tests/test_smoke.py`.
 - Notebooks via Jupyter; analysis reads CSVs from `data/`.
 - Data is tracked: none. `data/`, `*.csv`, `*.pdf`, `__pycache__/` are
-  gitignored; the literature corpus and documentation are tracked. Exception
-  (owner ruling 2026-11-23): figure PNGs --- `output/report_notebook_v1/*.png`
-  and `data/*/figures/*.png` --- are versioned so every markdown document
-  renders its pictures on any clone; CSVs and compiled PDFs stay generated
-  and ignored.
+  gitignored; the literature corpus and documentation are tracked. Exceptions
+  (owner ruling 2026-11-23): figure PNGs and figure PDFs
+  (`output/report_notebook_v1/*.{png,pdf}`, `data/*/figures/*.{png,pdf}`) and
+  the compiled PDFs of tracked markdown documents are versioned so every
+  document renders on any clone; the `context/` corpus PDFs (third-party
+  publisher material) and CSVs stay untracked and ignored.
 - Required environment variables or credentials: none.
 - Container-wide inventory (Nix, Julia, uv) deliberately not repeated; it
   lives in `/workspace/AGENTS.md`.
@@ -119,8 +120,10 @@ here.
   ADR-0002).
 - Naming: no spaces in filenames; record ids per the `AdmiralsLog/` charter;
   run outputs carry their parameter tags in the filename.
-- Generated artifacts: run outputs (`data/`) and compiled PDFs are never
-  committed (gitignored); generated reports are never hand-edited.
+- Generated artifacts: run outputs (`data/`) and CSVs are never committed
+  (gitignored); compiled PDFs are committed only where the PDF exceptions
+  above apply (figure PDFs and PDFs of tracked markdown documents); generated
+  reports are never hand-edited.
 
 # AdmiralsLog Usage
 
