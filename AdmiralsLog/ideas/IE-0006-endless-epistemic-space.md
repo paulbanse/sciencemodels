@@ -1,7 +1,7 @@
 ---
 title: "IE-0006 - Options for an endless epistemic space"
-author: "Antigravity"
-date: "2026-11-16"
+author: "Paul"
+date: "2026-11-24"
 tags: [idea, epistemic-landscape, open-endedness, refills, scaling, horizon]
 project: "sciencemodels"
 status: idea
@@ -37,3 +37,10 @@ Four design options can make epistemic space effectively endless, with distinct 
 ## Assessment note
 
 **Option 3 (dynamic peak birth / `frontier` refill paired with mobility shocks, `P-0007`)** is the most promising path for `sciencemodels`: it preserves the fast $20 \times 20$ `ideal_Merit` yardstick and isolates *why* endless frontiers still fail to prevent lock-in when visibility herding anchors scientists to old paradigms. **Option 1** ($L \times L$ scaling) is a clean secondary robustness check for finite-size sensitivity.
+
+## New option to be assessed
+
+5. **Refilling the Grid on neigbours:**
+   - *Mechanism:* When knowledge is harvested on one cell, distribute the harvested knowledge in *another* neighbouring cell following a gaussian probability
+   - *Pros:* Keeps `ideal_Merit` fast ($O(400)$), supports arbitrarily long horizons ($T \to \infty$) with stationary-ergodic dynamics, and models Kuhnian paradigm shifts directly.
+   - *Cons:* Requires replacing `percentage_knowledge_harvested` (share of static initial stock) with a flow/rate metric (e.g., harvest per step relative to frontier potential). Estimation of the dynamics to be decided
