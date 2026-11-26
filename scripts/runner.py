@@ -11,7 +11,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sciencemodels import landscapes
-from sciencemodels.model import MyModel
+from sciencemodels.model import CANONICAL_VANISHING_FACTOR, MyModel
 
 
 # example of generation params for landscapes.multipleGaussians :
@@ -56,7 +56,7 @@ all_params = {'n_agents':3,             # minimum 3
               "agent_seed": 1,                           # seed for the random of the agents
               "step_limit": 200,
               "agent_generation_function": landscapes.uniform, # if this is not defined the function is just 
-              "vanishing_factor_for_prestige": 0.9,
+              "vanishing_factor_for_prestige": CANONICAL_VANISHING_FACTOR,  # ADR-0003: 0.5**(1/10) ~= 0.933
               "use_visibility_reward": True,
               "knowledge_normalization": "share",   # explicit pin so runs are self-describing
               "prestige_accrual": "harvested",      # explicit pin so runs are self-describing

@@ -1,19 +1,34 @@
-"""F2b_v2 - Career-flows decoupling, post-BUG-0006 (final-step ideal corr).
+"""F2b_v2 - Career flows: per-capita harvest, alignment and population by entry
+rate and exit rule (ADR-0003 clock, mgstd5).
 
-Section 4.3 of the paper sketch. Final-step Corr(prestige, ideal merit)
-against the entry rate g in {0.05, 0.1, 0.2}, for mgstd5 vs noisypr5,
-curiosity-averaged (pooled 3 c x 20 seeds = 60 runs per point), from the
-post-fix re-run of the 360-run sweep B:
+Section 4.3 of the paper sketch.  Three panels against the entry rate g, split
+by the ADR-0003 exit rule (``fixed_span`` vs ``age_hazard_staggered``), pooled
+over curiosity (3 c x 20 seeds = 60 runs per point):
 
-    data/career_flows_v2/careerB_*.csv  (18 cells, H = 200, vanishing 0.9)
+  (a) per-capita harvest  = harvested_fin / career_pop_final (terminal stock)
+  (b) terminal Corr(prestige, ideal merit)  (c_ideal_fin)
+  (c) final population    (career_pop_final)
 
-VERIFICATION (brief): clean terrain must NOT dip into negative
-correlations -- asserted on the CI lows of every mgstd5 point. Pre-fix
-(v1) the same cells read negative (the newborn zero-padding artifact);
-the v1 curiosity-averaged means are computed here for the note.
+WHY THE PANELS CHANGED.  The pre-ADR figure split clean (``mgstd5``) from noisy
+(``noisypr5``) terrain.  The ADR-0003 career arm is ``mgstd5`` only -- there are
+no ``noisypr5`` cells in ``data/career_flows_adr0003`` -- so that contrast
+cannot be drawn from this archive and is not imitated.  The honest substitute
+is the exit-rule split, which the new arm does carry and which carries the
+ADR-0003 qualification (ii): under ``fixed_span`` the population is pinned
+(one retirement per arrival), so per-capita harvest is FLAT in g, while under
+``age_hazard_staggered`` the population grows and per-capita harvest falls.
 
-Replaces the pre-fix F2b_career_flows_noisy_vs_clean.png. Model-internal,
-NOT calibrated.
+ARCHIVE NAMING.  The ADR-0003 exit modes are ``fixed_span`` and
+``age_hazard_staggered`` (pre-ADR names: ``none`` / ``age_hazard``); the entry
+grid moved from g in {0.05, 0.1, 0.2} to {0.125, 0.25, 0.5}; one step is 0.5 yr
+and a career is 40 yr (tau_max = 80).
+
+``build(outdir, data_root)``: ``data_root`` defaults to the ADR-0003 archive;
+pass ``data_root="data/career_flows_v2"`` to regenerate the pre-ADR figure
+(``careerB_*.csv`` trajectories + ``*_career.csv`` sidecars).  That archive
+has two landscapes and one exit rule, so the split becomes landscape there.
+
+Model-internal, NOT calibrated.
 
 Run:
     MPLBACKEND=Agg /opt/hermes/.venv/bin/python \
@@ -37,126 +52,293 @@ sys.path.insert(0, str(HERE))
 import diagram_templates as T
 import visual_qa
 
-OUT = REPO / "output/report_notebook_v1/F2b_v2_career_flows_noisy_vs_clean.png"
+BASENAME = "F2b_v2_career_flows_noisy_vs_clean"
+DATA_ROOT = REPO / "data" / "career_flows_adr0003"
 
-G_LEVELS = (0.05, 0.1, 0.2)
-LANDSCAPES = ("mgstd5", "noisypr5")
-COL = "Corr_prestige_ideal_merit"
-
-
-def _final_step_frames() -> pd.DataFrame:
-    files = sorted(p for p in
-                   (REPO / "data/career_flows_v2").glob("careerB_*.csv")
-                   if not p.name.endswith("_career.csv"))
-    assert len(files) == 18, f"expected 18 career-flow cells, got {len(files)}"
-    df = pd.concat([pd.read_csv(p) for p in files], ignore_index=True)
-    fin = df[df.Step == df.Step.max()].copy()
-    assert len(fin) == 360, f"expected 360 final-step rows, got {len(fin)}"
-    return fin
+EXIT_MODES = ("fixed_span", "age_hazard_staggered")
+LEGACY_GROUPS = ("mgstd5", "noisypr5")
+Z95 = 1.96
+PANELS = (("percap", "per-capita harvest"),
+          ("align", "Corr(prestige, ideal merit)"),
+          ("npop", "final population (agents)"))
 
 
-def _summarise(fin: pd.DataFrame) -> pd.DataFrame:
-    rows = []
-    for (land, g), sub in fin.groupby(["landscape", "agent_generation_time"]):
-        v = sub[COL].to_numpy(float)
-        mean, se = float(v.mean()), float(v.std(ddof=1) / np.sqrt(len(v)))
-        rows.append({"landscape": land, "entry": g, "value": mean, "se": se,
-                     "ci_lo": mean - 1.96 * se, "ci_hi": mean + 1.96 * se,
-                     "n": len(v)})
-    out = pd.DataFrame(rows)
-    assert len(out) == 6, f"expected 6 points, got {len(out)}"
-    # brief verification: clean terrain must not dip negative (CI lows too)
-    clean = out[out.landscape == "mgstd5"]
-    assert (clean.ci_lo > 0).all(), \
-        f"clean-terrain CI low dips <= 0: {clean[['entry', 'ci_lo']].to_dict('records')}"
-    return out.sort_values(["landscape", "entry"]).reset_index(drop=True)
+def _require(cond: bool, msg: str) -> None:
+    if not cond:
+        raise AssertionError(msg)
 
 
-def _v1_means() -> dict:
-    """Curiosity-averaged pre-fix means per (landscape, g) for the note."""
-    out = {}
-    for land, path in [("mgstd5", "career_flows_v1/careerB_analysis.csv"),
-                       ("noisypr5", "career_flows_noisy_v1/noisyB_analysis.csv")]:
-        p = REPO / "data" / path
-        if not p.is_file():
-            continue
-        d = pd.read_csv(p)
-        out[land] = d.groupby("agent_generation_time")["ideal_corr_final"].mean()
+def data_root_path(data_root=None) -> Path:
+    """Career-flow archive root (default: ``data/career_flows_adr0003``)."""
+    root = Path(data_root) if data_root is not None else DATA_ROOT
+    return root if root.is_absolute() else (REPO / root)
+
+
+def _mean_ci(v) -> tuple[float, float, float, int]:
+    v = np.asarray(v, dtype=float)
+    v = v[np.isfinite(v)]
+    n = int(v.size)
+    m = float(v.mean())
+    se = float(v.std(ddof=1) / np.sqrt(n)) if n > 1 else float("nan")
+    return m, m - Z95 * se, m + Z95 * se, n
+
+
+# ---------------------------------------------------------------------------
+# loaders
+# ---------------------------------------------------------------------------
+def _load_cells(root: Path) -> pd.DataFrame:
+    files = sorted((root / "cells").glob("career_*.csv"))
+    _require(len(files) == 18,
+             f"{root}/cells: 18 career cells expected (3 c x 3 g x 2 exit), "
+             f"found {len(files)}")
+    d = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
+    _require(len(d) == 18 * 20, f"career cells: {len(d)} seed rows, expected 360")
+    _require(sorted(d.exit_mode.unique().tolist()) == sorted(EXIT_MODES),
+             f"exit grid {sorted(d.exit_mode.unique())}")
+    _require(sorted(d.landscape.unique().tolist()) == ["mgstd5"],
+             f"career arm must be mgstd5 only, got "
+             f"{sorted(d.landscape.unique())}")
+    _require(sorted(d.curiosity.unique().tolist()) == [0.3, 0.5, 0.7],
+             f"curiosity grid {sorted(d.curiosity.unique())}")
+    # per-capita harvest is the terminal harvested stock per surviving agent
+    rel = (d.harvested_fin / d.career_pop_final
+           - d.career_percap_harvest_final).abs().max()
+    _require(rel < 1e-9, f"per-capita harvest identity violated (max {rel:g})")
+    _require((d.n_final == d.career_pop_final).all(),
+             "career_pop_final != n_final")
+    out = d.assign(group=d.exit_mode,
+                   percap=d.career_percap_harvest_final,
+                   align=d.c_ideal_fin,
+                   npop=d.career_pop_final,
+                   align_tm=d.c_ideal_tm)
     return out
 
 
-def build():
-    fin = _final_step_frames()
-    df = _summarise(fin)
-    v1 = _v1_means()
-    s = {**T.HOUSE_STYLE, "figsize": (9.6, 4.9)}
-    fig, ax = plt.subplots(figsize=s["figsize"])
+def _load_legacy(root: Path) -> pd.DataFrame:
+    traj_files = sorted(p for p in root.glob("careerB_*.csv")
+                        if not p.name.endswith("_career.csv"))
+    _require(len(traj_files) == 18,
+             f"{root}: 18 careerB_* trajectory files expected, "
+             f"found {len(traj_files)}")
+    frames = []
+    for f in traj_files:
+        side = f.with_name(f.stem + "_career.csv")
+        _require(side.is_file(), f"missing career sidecar {side.name}")
+        t = pd.read_csv(f)
+        k = pd.read_csv(side)
+        last_t = t[t.Step == t.Step.max()]
+        last_k = k[k.Step == k.Step.max()]
+        _require(len(last_t) == len(last_k),
+                 f"{f.name}: {len(last_t)} terminal traj rows vs "
+                 f"{len(last_k)} career rows")
+        frames.append(pd.DataFrame({
+            "cell_tag": [t.cell_tag.iloc[0]] * len(last_t),
+            "curiosity": last_t.curiosity.to_numpy(float),
+            "landscape": last_t.landscape.to_numpy(),
+            "g": last_t.agent_generation_time.to_numpy(float),
+            "seed": last_t.seed.to_numpy(),
+            "percap": last_k.percap_harvest_cum.to_numpy(float),
+            "align": last_t.Corr_prestige_ideal_merit.to_numpy(float),
+            "npop": last_k.n_agents.to_numpy(float),
+            "align_tm": np.nan,
+        }))
+    d = pd.concat(frames, ignore_index=True).assign(group=lambda x: x.landscape)
+    _require(d.groupby("g").size().nunique() == 1, "unbalanced g cells")
+    return d
 
-    colors = {"mgstd5": T.PALETTE["purple"], "noisypr5": T.PALETTE["orange"]}
-    labels = {"mgstd5": "mgstd5 (clean)", "noisypr5": "noisypr5"}
-    for land in LANDSCAPES:
-        sub = df[df.landscape == land]
-        ax.errorbar(sub.entry, sub.value,
-                    yerr=[sub.value - sub.ci_lo, sub.ci_hi - sub.value],
-                    fmt="o-", color=colors[land], label=labels[land],
-                    linewidth=2, markersize=6, capsize=4, elinewidth=1.4)
-        for r in sub.itertuples():
-            ax.text(r.entry, r.ci_hi + 0.007, f"{r.value:+.3f}",
-                    ha="center", va="bottom", fontsize=s["tick_size"] - 1)
-    ax.axhline(0, color=T.PALETTE["gray"], linewidth=1.2)
 
-    ax.set_xticks(list(G_LEVELS))
-    ax.set_xticklabels([f"{g:.2f}" for g in G_LEVELS])
-    ax.set_xlim(0.02, 0.232)
-    ax.set_ylim(-0.06, 0.215)
-    ax.set_yticks([0.0, 0.05, 0.10, 0.15, 0.20])
-    T._cosmetics(ax, s,
-                 "Every entry cell aligns after the fix; slower entry "
-                 "aligns more strongly",
-                 "entry rate (agent_generation_time)",
-                 "Corr(prestige, ideal merit), final step")
-    ax.legend(loc="upper right", fontsize=s["tick_size"], frameon=False)
+def load(data_root=None) -> tuple[pd.DataFrame, str]:
+    root = data_root_path(data_root)
+    if sorted((root / "cells").glob("career_*.csv")):
+        return _load_cells(root), "adr0003"
+    if sorted(root.glob("careerB_*.csv")):
+        return _load_legacy(root), "pre-adr"
+    raise AssertionError(f"{root}: not a career-flow archive")
 
-    clean_lo = float(df[df.landscape == "mgstd5"].ci_lo.min())
-    v1txt = ""
-    if v1:
-        parts = []
-        for land in LANDSCAPES:
-            if land in v1:
-                m = v1[land]
-                parts.append(f"{land} " + "/".join(f"{m[g]:+.3f}" for g in G_LEVELS))
-        v1txt = (" Early-draft curiosity-averaged means: "
-                 + "; ".join(parts) + " (newborn-measurement artifact).")
+
+def summarise(d: pd.DataFrame) -> pd.DataFrame:
+    rows = []
+    for (grp, g), sub in d.groupby(["group", "g"], sort=True):
+        rec = {"group": grp, "g": float(g), "n": int(len(sub))}
+        for key in ("percap", "align", "npop", "align_tm"):
+            if sub[key].notna().sum() < 2:
+                rec[key] = rec[key + "_lo"] = rec[key + "_hi"] = float("nan")
+                continue
+            m, lo, hi, n = _mean_ci(sub[key])
+            rec[f"{key}"] = m
+            rec[f"{key}_lo"] = lo
+            rec[f"{key}_hi"] = hi
+        rows.append(rec)
+    out = pd.DataFrame(rows).sort_values(["group", "g"]).reset_index(drop=True)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# figure
+# ---------------------------------------------------------------------------
+def _sidecar(st: pd.DataFrame, layout: str, src: str) -> pd.DataFrame:
+    rows = []
+    keymap = {"percap": "f2b_percap", "align": "f2b_align", "npop": "f2b_npop"}
+    stat = {"percap": "mean_harvest_per_agent",
+            "align": "mean_corr_prestige_ideal",
+            "npop": "mean_agents"}
+    for key, metric in keymap.items():
+        for r in st.itertuples():
+            rows.append({
+                "figure": BASENAME, "panel": key, "metric": metric,
+                "statistic": stat[key], "series": r.group, "group": r.group,
+                "g": r.g, "value": float(getattr(r, key)),
+                "ci_lo": float(getattr(r, f"{key}_lo")),
+                "ci_hi": float(getattr(r, f"{key}_hi")), "n": int(r.n),
+                "source_file": src,
+                "note": f"{layout}: curiosity-pooled mean over {r.n} runs, "
+                        "95% CI = mean +/- 1.96 SE"})
+    for r in st.itertuples():
+        if not np.isfinite(r.align_tm):
+            continue
+        rows.append({
+            "figure": BASENAME, "panel": "align_tm", "metric": "f2b_align_tm",
+            "statistic": "mean_corr_prestige_ideal", "series": r.group,
+            "group": r.group, "g": r.g, "value": float(r.align_tm),
+            "ci_lo": float(r.align_tm_lo), "ci_hi": float(r.align_tm_hi),
+            "n": int(r.n), "source_file": src,
+            "note": "time-mean alignment variant (not plotted)"})
+    return pd.DataFrame(rows)
+
+
+def build(outdir="output/report_notebook_v1", data_root=None) -> dict:
+    root = data_root_path(data_root)
+    d, layout = load(data_root)
+    st = summarise(d)
+    canonical = EXIT_MODES if layout == "adr0003" else LEGACY_GROUPS
+    present = set(d.group.tolist())
+    groups = [g for g in canonical if g in present]
+    _require(len(groups) == len(present),
+             f"unexpected series {sorted(present - set(groups))}")
+    g_levels = sorted(d.g.unique().tolist())
+    n_tot = int(len(d))
+
+    s = {**T.HOUSE_STYLE, "figsize": (9.9, 4.9)}
+    fig, axes = plt.subplots(1, 3, figsize=s["figsize"])
+    fig.subplots_adjust(left=0.095, right=0.985, top=0.752, bottom=0.275,
+                        wspace=0.28)
+    colors = {g: T.PALETTE[c] for g, c in
+              zip(groups, ("purple", "orange", "green", "blue"))}
+    markers = {g: m for g, m in zip(groups, ("o", "s", "D", "^"))}
+    pos = np.arange(len(g_levels), dtype=float)
+
+    handles = []
+    for ax, (key, ylabel) in zip(axes, PANELS):
+        lo_all = float(st[f"{key}_lo"].min())
+        hi_all = float(st[f"{key}_hi"].max())
+        vspan = hi_all - lo_all
+        for gi, grp in enumerate(groups):
+            sub = st[st.group == grp].sort_values("g").reset_index(drop=True)
+            _require(len(sub) == len(g_levels), f"{grp}: g grid")
+            ln = ax.errorbar(
+                pos, sub[key],
+                yerr=[sub[key] - sub[key + "_lo"], sub[key + "_hi"] - sub[key]],
+                fmt=markers[grp] + "-", color=colors[grp], markersize=5,
+                linewidth=1.9, capsize=3, elinewidth=1.2, label=grp)
+            if key == "percap":
+                handles.append(ln)
+            fmt = {"percap": "{:.4f}", "align": "{:+.3f}",
+                   "npop": "{:.0f}"}[key]
+            vals = sub[key].to_numpy(float)
+            # endpoint labels only: above a falling series, below a rising one,
+            # pushed outside the line corridor at both ends of the axis
+            # alternate the series' labels above/below so two curves that
+            # nearly coincide never share a label band
+            dy_b = 12.0 if gi % 2 == 0 else -12.0
+            for x_, v, ha, dx in ((pos[0], vals[0], "right", -7.0),
+                                  (pos[-1], vals[-1], "left", 7.0)):
+                dy = dy_b
+                ax.annotate(fmt.format(v), xy=(x_, v), xytext=(dx, dy),
+                            textcoords="offset points", ha=ha, va="center",
+                            fontsize=s["tick_size"] - 1.5, color=colors[grp])
+        if key == "align":
+            ax.axhline(0, color=T.PALETTE["gray"], linewidth=1.0)
+            lo_all, hi_all = min(lo_all, 0.0), max(hi_all, 0.0)
+            vspan = hi_all - lo_all
+        # room for the endpoint labels above and below the extreme points
+        ax.set_ylim(lo_all - 0.14 * vspan, hi_all + 0.10 * vspan)
+        ax.set_xticks(pos)
+        ax.set_xticklabels([f"{g:g}" for g in g_levels])
+        ax.set_xlim(-0.55, len(g_levels) - 1 + 0.55)
+        T._cosmetics(ax, s, "", "entry rate g (newcomers per step)", ylabel)
+        ax.yaxis.labelpad = 6.0
+
+    # the per-capita panel carries the ADR-0003 qualification (ii): the
+    # pinned (constant-N) group is identified from the data, never by order
+    pc = st.pivot_table(index="g", columns="group", values="percap")
+    nn = st.pivot_table(index="g", columns="group", values="npop")
+    pinned = [g for g in groups if nn[g].nunique() == 1]
+    moving = [g for g in groups if g not in pinned]
+    if layout == "adr0003":
+        _require(len(pinned) == 1 and len(moving) == 1,
+                 f"expected one pinned and one growing exit mode, got "
+                 f"pinned={pinned}, moving={moving}")
+        pin, mov = pinned[0], moving[0]
+        _require(float(nn[pin].iloc[-1]) <= float(nn[mov].iloc[0]),
+                 "pinned population is not the smaller one")
+        fig.suptitle(
+            f"{pin} pins the population: per-capita harvest flat "
+            f"({pc[pin].iloc[0]:.4f} \u2192 {pc[pin].iloc[-1]:.4f}); "
+            f"{mov} falls "
+            f"({pc[mov].iloc[0]:.4f} \u2192 {pc[mov].iloc[-1]:.4f})",
+            fontsize=s["title_size"] - 1.0, y=0.982)
+    else:
+        fig.suptitle(
+            "Pre-ADR career sweep: per-capita harvest falls with entry on "
+            + " and ".join(groups), fontsize=s["title_size"] - 1.0, y=0.982)
+    fig.legend(handles, list(groups), loc="upper center",
+               bbox_to_anchor=(0.5, 0.915), ncol=len(groups),
+               fontsize=s["tick_size"], frameon=False)
+
+    if layout == "adr0003":
+        split_note = ("The pre-ADR clean-vs-noisy landscape split is NOT drawn: "
+                      "the ADR-0003 career arm is mgstd5 only. The exit-rule "
+                      "split replaces it.")
+    else:
+        split_note = ("Pre-ADR archive: landscape split; one exit rule only, "
+                      "so no exit-rule contrast.")
     note = textwrap.fill(
-        "source: data/career_flows_v2/careerB_*.csv (re-run of "
-        "sweep B: g x c x landscape x 20 seeds = 360 runs, H = 200, "
-        "vanishing 0.9), final step, curiosity-averaged (pooled 60 runs "
-        "per point, 95% CI = mean +/- 1.96 SE). VERIFICATION: all mgstd5 "
-        f"CI lows > 0 (min {clean_lo:+.3f})." + v1txt +
-        " Model-internal, NOT calibrated.", width=150)
+        f"source: {root.relative_to(REPO)}/cells/*.csv (c x g x group, 20 "
+        f"seeds/cell, {n_tot} runs). ADR-0003 pins: 1 step = 0.5 yr, entry age "
+        "25, tau_max = 80, gamma = 0.933, g in "
+        "{" + ",".join(f"{g:g}" for g in g_levels) + "}, H = 200; per-capita "
+        "harvest = harvested_fin / career_pop_final. " + split_note +
+        (f" Qualification (ii): {pin} holds N at "
+         f"{nn[pin].iloc[0]:.0f} (per-capita harvest flat, "
+         f"{pc[pin].iloc[0]:.4f} \u2192 {pc[pin].iloc[-1]:.4f}) while {mov} "
+         f"grows N {nn[mov].iloc[0]:.0f} \u2192 {nn[mov].iloc[-1]:.0f} "
+         f"(per-capita harvest {pc[mov].iloc[0]:.4f} \u2192 "
+         f"{pc[mov].iloc[-1]:.4f}). " if layout == "adr0003" else "") +
+        "95% CI over runs; model-internal, NOT calibrated.", width=160)
     fig.text(0.006, 0.012, note, fontsize=s["note_size"],
              color=T.PALETTE["gray"], va="bottom", linespacing=1.45)
-    fig.tight_layout(rect=(0, 0.21, 1, 1))
 
-    export = df.copy()
-    export.insert(0, "metric", "f2bv2")
-    report = visual_qa.assert_figure_clean(fig, [
-        {"ax": ax, "metric": "f2bv2", "expect_lines": 2,
-         "points_per_line": 3, "sidecar": export,
-         "ci_cols": ("ci_lo", "ci_hi")},
-    ])
+    sidecar = _sidecar(st, layout, f"{root.relative_to(REPO)}/cells/*.csv")
+    panels = [{"ax": ax, "metric": f"f2b_{key}", "expect_lines": len(groups),
+               "points_per_line": len(g_levels), "sidecar": sidecar}
+              for ax, (key, _) in zip(axes, PANELS)]
+    report = visual_qa.assert_figure_clean(fig, panels)
 
-    outdir = OUT.parent
-    outdir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(OUT, dpi=s["dpi"])
-    pdf = OUT.with_suffix(".pdf")
+    out = Path(outdir)
+    if not out.is_absolute():
+        out = REPO / out
+    out.mkdir(parents=True, exist_ok=True)
+    png = out / f"{BASENAME}.png"
+    pdf = out / f"{BASENAME}.pdf"
+    fig.savefig(png, dpi=s["dpi"])
     fig.savefig(pdf)
     plt.close(fig)
-    csv = T.write_figure_data(export, OUT)
+    csv_path = T.write_figure_data(sidecar, png)
     print(f"QA: {report.get('_total', 0)} failure(s)")
-    print(f"Wrote {OUT} / {pdf} / {csv}")
-    print(df.to_string(index=False))
-    return {"png": str(OUT), "pdf": str(pdf), "data_csv": str(csv)}
+    print(f"Wrote {png} / {pdf} / {csv_path}")
+    print(st.round(5).to_string(index=False))
+    return {"png": str(png), "pdf": str(pdf), "data_csv": str(csv_path),
+            "qa": report, "layout": layout, "sidecar_rows": len(sidecar)}
 
 
 if __name__ == "__main__":
