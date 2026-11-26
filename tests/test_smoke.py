@@ -30,6 +30,11 @@ Canary run (3 agents, seeded, 30 steps) asserting:
 13. ADR-0003 canonical turnover canary: ``exit_mode="fixed_span"``,
     ``g=0.25``, ``gamma=0.5**(1/10)`` and ``tau_max=80`` holds N=20,
     retires the founder cohort, and reports ``gap_recent``.
+14. attraction-trias knob ``prestige_weight_in_visibility``: default None is
+    bit-identical to the pre-edit code path (stored digests), w=0.0 matches
+    ``use_visibility_reward=False``, w=1.0 matches
+    ``use_visibility_reward=True``, w=0.5 binds cleanly, and values outside
+    [0, 1] are refused.
 """
 import os
 import sys
@@ -586,6 +591,96 @@ def main():
         f"gap_recent={adr_report['gap_recent']:+.4f}, "
         "age-hazard modes and validation OK"
     )
+
+    # 14. attraction-trias knob (prestige_weight_in_visibility):
+    #     (a) the default None reproduces the PRE-EDIT code path bit-for-bit -
+    #         the two digests below were measured on this exact config in the
+    #         pre-edit tree (branch point fb797fb), so equality here is an
+    #         identity claim, not a tolerance;
+    #     (b) w = 0.0 is bit-identical to use_visibility_reward=False;
+    #     (c) w = 1.0 is bit-identical to use_visibility_reward=True;
+    #     (d) w = 0.5 binds: the trajectory moves off BOTH extremes and stays
+    #         finite (no NaN creep);
+    #     plus validation of values outside [0, 1].
+    import hashlib
+
+    ATTR_PARAMS = dict(CANARY_PARAMS, n_agents=5, step_limit=25, agent_seed=3)
+    ATTR_PRE_EDIT_DIGEST = {
+        True: "c625cd78f15c0dbba40503196aa7e33685b2789b0f26d66ee97c0233d959ea27",
+        False: "f8ebc78a55a46a68b35cd24c2b96362451f09ba562cb9e8e49d540d8275c953d",
+    }
+    ATTR_ECHO_KEYS = {"use_visibility_reward", "prestige_weight_in_visibility"}
+
+    def _report_digest(rep):
+        return hashlib.sha256(
+            "|".join(f"{k}={v!r}" for k, v in sorted(rep.items())).encode()
+        ).hexdigest()
+
+    def _dynamics(rep):
+        return sorted(
+            (k, repr(v)) for k, v in rep.items() if k not in ATTR_ECHO_KEYS
+        )
+
+    for flag, want in ATTR_PRE_EDIT_DIGEST.items():
+        m = MyModel(**dict(ATTR_PARAMS, use_visibility_reward=flag))
+        r = m.run_mode_for_bulk()
+        assert _report_digest(r) == want, (
+            f"prestige_weight_in_visibility=None drifted from the pre-edit "
+            f"code path (use_visibility_reward={flag}): "
+            f"{_report_digest(r)} != {want}"
+        )
+    print("attraction-trias None bit-identity OK (2 pre-edit digests)")
+
+    base_false = MyModel(**dict(ATTR_PARAMS, use_visibility_reward=False))
+    base_true = MyModel(**dict(ATTR_PARAMS))
+    w0 = MyModel(**dict(ATTR_PARAMS, prestige_weight_in_visibility=0.0))
+    w1 = MyModel(**dict(ATTR_PARAMS, prestige_weight_in_visibility=1.0))
+    w5 = MyModel(**dict(ATTR_PARAMS, prestige_weight_in_visibility=0.5))
+    rbf = base_false.run_mode_for_bulk()
+    rbt = base_true.run_mode_for_bulk()
+    rw0 = w0.run_mode_for_bulk()
+    rw1 = w1.run_mode_for_bulk()
+    rw5 = w5.run_mode_for_bulk()
+
+    assert _dynamics(rbf) == _dynamics(rw0), (
+        "w=0.0 is not bit-identical to use_visibility_reward=False"
+    )
+    assert base_false.datacollector.get_model_vars_dataframe().equals(
+        w0.datacollector.get_model_vars_dataframe()
+    ), "w=0.0 model_vars trajectory moved vs use_visibility_reward=False"
+    assert _dynamics(rbt) == _dynamics(rw1), (
+        "w=1.0 is not bit-identical to use_visibility_reward=True"
+    )
+    assert base_true.datacollector.get_model_vars_dataframe().equals(
+        w1.datacollector.get_model_vars_dataframe()
+    ), "w=1.0 model_vars trajectory moved vs use_visibility_reward=True"
+    print("attraction-trias extremes OK: w=0.0 == flag False, w=1.0 == flag True")
+
+    assert _dynamics(rw5) != _dynamics(rw0), "w=0.5 inert vs w=0.0"
+    assert _dynamics(rw5) != _dynamics(rw1), "w=0.5 inert vs w=1.0"
+    assert not w5.datacollector.get_model_vars_dataframe()[
+        ["Corr_prestige_ideal_merit", "percentage_knowledge_harvested"]
+    ].isna().any().any(), "w=0.5 produced NaN trajectory values"
+    assert np.isfinite(rw5["mean_prestige"]), rw5["mean_prestige"]
+    print(
+        "attraction-trias binding OK: w=0.5 moves trajectories off both "
+        "extremes, finite throughout"
+    )
+
+    for bad in (
+        dict(prestige_weight_in_visibility=-0.1),
+        dict(prestige_weight_in_visibility=1.5),
+        dict(prestige_weight_in_visibility=float("nan")),
+    ):
+        try:
+            MyModel(**dict(CANARY_PARAMS, **bad))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(
+                f"invalid prestige_weight_in_visibility accepted: {bad}"
+            )
+    print("attraction-trias knob validation OK: out-of-range and NaN refused")
 
     print("ALL SMOKE TESTS PASSED")
 

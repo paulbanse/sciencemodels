@@ -169,11 +169,26 @@ class Scientist(mesa.Agent):
                 weights=prest,
             )
 
-        visibility_used = visibility
-        if self.model.use_visibility_reward:
-            visibility_used = (self.model.agent_avg_distance + 1) / (
-                avg_agent_distance_p + 1
+        w = self.model.prestige_weight_in_visibility
+        if w is None:
+            # pre-existing code path, kept bit-identical
+            visibility_used = visibility
+            if self.model.use_visibility_reward:
+                visibility_used = (self.model.agent_avg_distance + 1) / (
+                    avg_agent_distance_p + 1
+                )
+        else:
+            # attraction-trias knob: d_eff(w) = (1-w) * d_own + w * d_own,P
+            # and V_eff(w) = (d̄_global + 1) / (d_eff(w) + 1). At w = 0.0 this
+            # is the use_visibility_reward=False rule and at w = 1.0 the
+            # use_visibility_reward=True rule, bit-identically (the smoke
+            # canary asserts both). When total prestige_vanishing == 0,
+            # avg_agent_distance_p has already fallen back to d_own, so
+            # d_eff(w) = d_own for every w.
+            d_eff = (np.float64(1.0) - w) * avg_agent_distance + (
+                w * avg_agent_distance_p
             )
+            visibility_used = (self.model.agent_avg_distance + 1) / (d_eff + 1)
 
         # differentiate between visibility of a field vs. visibility of an agent?
         # (would not this formulation stay constant across neihbouring cells?; answer: no, it won't)
