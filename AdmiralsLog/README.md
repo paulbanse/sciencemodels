@@ -13,10 +13,8 @@ and its register, what happened (`logs/`), and what is retired
 
 | Document | Purpose | Status | Supersedes |
 | --- | --- | --- | --- |
-| `workplan_2026_11.md` | Consolidated post-review workplan (`f3d53a3`, Paper v3.3, `IE-0006`–`IE-0008`, open proposals `P-0001` & `P-0007`–`P-0011`) | live | - |
-| `way_forward.md` | Exploration paths from the proxy-failure ABM to a paper (v5.0, updated post-Wave-4 `F1`–`F4`) | live | - |
-| `HANDOVER-2026-11-14.md` | Self-contained project state, evidence ledger, immediate next steps, and open decisions (`Q1`–`Q11`, `P-0001`) | live | - |
+| `workplan_2026_11.md` | Consolidated post-review workplan (`f3d53a3`, `ADR-0003`, Paper v3.3+, `IE-0006`–`IE-0008`, open proposals `P-0001` & `P-0007`–`P-0011`) | live | `way_forward.md`, `HANDOVER-2026-11-14.md` |
 
 ## Register counters
 
-Next ids: ADR-0003, BUG-0007, CONT8, DE-0001, IE-0009, UE-0004, P-0012.
+Next ids: ADR-0004, BUG-0007, CONT8, DE-0001, IE-0009, UE-0004, P-0012.

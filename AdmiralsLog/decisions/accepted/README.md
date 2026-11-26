@@ -8,3 +8,4 @@ is authoritative.
 | --- | --- | --- |
 | ADR-0001 | Multiagent coordination (records, autonomy, git discipline) | accepted |
 | ADR-0002 | Coding style and reproducibility (notebooks vs scripts) | accepted |
+| ADR-0003 | Canonical time-scale anchoring (6-month step clock) | accepted |
