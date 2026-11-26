@@ -48,6 +48,7 @@ class MyModel(mesa.Model):
     initial_curiosity: np.float64
     epsilon: np.float64
     use_distance: bool
+    prestige_weight_in_visibility: float | None
     _scientists: list[Scientist]
     total_initial_knowledge: np.float64
     avg_current_agent_knowledge: np.float64
@@ -177,6 +178,7 @@ class MyModel(mesa.Model):
         exit_mode: str = "none",
         tau_max: int = CANONICAL_TAU_MAX,
         use_visibility_reward: bool = True,
+        prestige_weight_in_visibility: float | None = None,
         knowledge_normalization: str = "share",
         prestige_accrual: str = "harvested",
         entry_prestige_stock: str = "prestige",
@@ -217,6 +219,23 @@ class MyModel(mesa.Model):
         self.exit_mode = exit_mode
         self.tau_max = int(tau_max)
         self.use_visibility_reward = use_visibility_reward
+        if prestige_weight_in_visibility is not None:
+            # Attraction-trias knob (task/attraction-trias-heatmap): w
+            # interpolates the visibility denominator between unweighted
+            # peer distance (w = 0, the use_visibility_reward=False rule) and
+            # prestige_vanishing-weighted peer distance (w = 1, the
+            # use_visibility_reward=True rule). None keeps the pre-existing
+            # code path bit-identically.
+            if not (0.0 <= float(prestige_weight_in_visibility) <= 1.0):
+                raise ValueError(
+                    "prestige_weight_in_visibility must be None or in [0, 1],"
+                    " got " + repr(prestige_weight_in_visibility)
+                )
+            self.prestige_weight_in_visibility: float | None = float(
+                prestige_weight_in_visibility
+            )
+        else:
+            self.prestige_weight_in_visibility = None
         self.agent_generation_function = agent_generation_function
         if knowledge_normalization not in ("share", "minmax"):
             raise ValueError(
