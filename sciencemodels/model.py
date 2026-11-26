@@ -485,9 +485,18 @@ class MyModel(mesa.Model):
         return np.float64(np.mean(recent) - np.mean(established))
 
     def _retire_agent(self, agent):
-        """Remove an agent from the roster, the grid and the Mesa AgentSet."""
+        """Remove an agent from the roster, grid, AgentSet and dyadic links.
+
+        Retirement can run with the Path B layer active, so any declared link
+        incident to the retiring agent must be dropped before ``dyadic_step``
+        indexes the surviving roster.
+        """
         if agent in self._scientists:
             self._scientists.remove(agent)
+        if self.links:
+            self.links = {
+                pair for pair in self.links if agent.unique_id not in pair
+            }
         try:
             self.grid.remove_agent(agent)
         except Exception:  # noqa: BLE001 - already-removed agent is harmless
