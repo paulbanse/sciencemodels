@@ -55,3 +55,8 @@ status: idea
    - *Pros:* It will give a more instinctive understanding of the work
    - *Cons:* uses space
 
+## Code-verified assessment
+
+- **#2 is inverted by the code.** `vanishing_factor_for_prestige` is applied in `Scientist.increase_prestige`: the accumulated stock is multiplied by $x$ and the new accrual added (`sciencemodels/agents.py:84-91`, `temp = temp * x; temp += value`). $x$ is a retention factor (1.0 = no forgetting; 0.5 = halve the stock per accrual), not a decay rate. The tested values 0.5/0.9/1.0 already span strong-to-no forgetting; lowering to 0.1 would strengthen forgetting, not weaken it, and weakening it means raising $x$ toward 1.0. It also acts per accrual event (roughly per step), so a "half after five years" reading needs a step-to-time mapping.
+- **#3 is confirmed, with a stronger consequence.** With `use_distance=0`, `compute_all_rewards` returns `curiosity * novelty / avg_current_agent_knowledge` and zero visibility (`sciencemodels/agents.py:123-126`), while `Scientist.step` still evaluates only the 4-neighbour von Neumann neighbourhood (`sciencemodels/agents.py:194-196`). This is local search with visibility off, not jump search. Because curiosity is a common multiplicative constant across all candidate rewards, it cancels in the comparison; under `use_distance=0` curiosity cannot alter movement (only `epsilon` noise can), so the draft's "different levels of curiosity" comparison is mechanically empty unless the reward is reformulated.
+

@@ -1,7 +1,8 @@
 ---
 title: "IE-0006 - Options for an endless epistemic space"
-author: "Paul"
-date: "2026-11-24"
+author: "Antigravity, Paul"
+date: "2026-11-16"
+updated: "2026-11-24"
 tags: [idea, epistemic-landscape, open-endedness, refills, scaling, horizon]
 project: "sciencemodels"
 status: idea
@@ -9,6 +10,7 @@ status: idea
 
 - **Status:** idea
 - **Date:** 2026-11-16
+- **Updated:** 2026-11-24
 - **Related:** `AdmiralsLog/proposals/P-0007-sabbatical-shocks-x-frontier-refills.md`, `output/reports/interventions_v1.md` (Arm C), `output/reports/turnover_v1.md` (`R6`), `drafts/paper_sketch_v1.md` (Sections 4.3 & 5.3)
 
 ## The idea
@@ -44,3 +46,7 @@ Four design options can make epistemic space effectively endless, with distinct 
    - *Mechanism:* When knowledge is harvested on one cell, distribute the harvested knowledge in *another* neighbouring cell following a gaussian probability
    - *Pros:* Keeps `ideal_Merit` fast ($O(400)$), supports arbitrarily long horizons ($T \to \infty$) with stationary-ergodic dynamics, and models Kuhnian paradigm shifts directly.
    - *Cons:* Requires replacing `percentage_knowledge_harvested` (share of static initial stock) with a flow/rate metric (e.g., harvest per step relative to frontier potential). Estimation of the dynamics to be decided
+
+## Code-verified assessment
+
+The Gaussian-neighbour refill (Option 5) is new code with a $\sigma$-dependent failure mode at both ends. `MyModel.farm` only removes harvested knowledge from the harvested tile (`sciencemodels/model.py:393-404`); no redistribution kernel exists. With small $\sigma$, refilled stock lands inside the 4-neighbour search horizon (`sciencemodels/agents.py:194-196`), so agents re-harvest the same local peak and visibility herding reproduces the `occupied` regime's mainstream lock-in (Arm C `R8`, $-83.8\%$ exploration). With $\sigma$ approaching the torus scale the kernel tends to uniform injection, leaving peaks unclaimed (`frontier`-like, $315\times$ residual knowledge) unless mobility (`P-0007`) is added. $\sigma$ must therefore be reported relative to both the search radius and $L$, with explicit truncation and renormalisation on the $20\times20$ torus. Finally, `percentage_knowledge_harvested` is `(total_initial_knowledge - sum(knowledge)) / total_initial_knowledge` (`sciencemodels/model.py:542-545`), so injection can make it fall or go negative; the rate/flow metric named in the Cons is mandatory.
