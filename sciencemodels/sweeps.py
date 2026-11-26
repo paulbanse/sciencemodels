@@ -49,6 +49,12 @@ MODEL_TARGETS: list[str] = [
     "mean_prestige",
 ]
 
+# ADR-0003 canonical clock: 1 step = 0.5 year; entry age 25, retirement 65,
+# tau_max = 80 steps; canonical entry g = CANONICAL_AGENT_GENERATION_TIME =
+# 0.25 (N = 20 renewed over one 80-step generation); canonical retention
+# gamma = CANONICAL_VANISHING_FACTOR = 0.5**(1/10) ~= 0.933 (5-year half-life).
+# The legacy 8-setup table below keeps its no-entry g = 0 baseline.
+
 #: Model constants held fixed across the career-flow family. Anything an arm
 #: varies must be a sweep axis, not an entry here, or the two arms stop being
 #: comparable.
@@ -159,6 +165,10 @@ def bulk_param_grid(setup: BulkSetup, step_limit: int = 400) -> dict[str, Any]:
     every other entry comes from the setup record.
     """
     from sciencemodels import landscapes  # deferred: landscapes imports matplotlib
+    from sciencemodels.model import (  # deferred: model imports mesa
+        CANONICAL_TAU_MAX,
+        CANONICAL_VANISHING_FACTOR,
+    )
 
     generation_function = getattr(landscapes, setup.cell_init)
     curiosities: list[float] | float
@@ -179,12 +189,18 @@ def bulk_param_grid(setup: BulkSetup, step_limit: int = 400) -> dict[str, Any]:
         "grid_size": 20,
         "cell_init_function": generation_function,  # generation method for the landscape, see landscapes for the definitions
         "generation_params": dict(setup.generation_params),  # parameters for the generation method
-        "agent_generation_time": 0,  # number of agent generated per generation, for example if 0.1, 10 new agent per generation
+        # ADR-0003 canonical entry is CANONICAL_AGENT_GENERATION_TIME = 0.25
+        # (N = 20 renewed over an 80-step generation).  This legacy bulk design
+        # keeps its no-entry g = 0 baseline; set g = 0.25 explicitly for an
+        # ADR-0003 turnover run.
+        "agent_generation_time": 0,
         "new_questions": 0,
         "agent_seed": 1,  # seed for the random of the agents
         "step_limit": step_limit,
         "agent_generation_function": agent_generation_function,  # if this is not defined the function is just mu
-        "vanishing_factor_for_prestige": 0.9,
+        "vanishing_factor_for_prestige": CANONICAL_VANISHING_FACTOR,
+        "exit_mode": "none",  # ADR-0003; explicit so runs are self-describing
+        "tau_max": CANONICAL_TAU_MAX,
         "use_visibility_reward": True,
         "knowledge_normalization": "share",  # explicit pin so runs are self-describing
         "prestige_accrual": "harvested",  # explicit pin so runs are self-describing

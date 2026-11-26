@@ -18,13 +18,20 @@ if TYPE_CHECKING:
     from .model import MyModel
 
 
+#: ADR-0003 canonical clock: 1 step = 0.5 academic years (6 months).
+AGE_AT_ENTRY = np.float64(25.0)
+AGE_AT_RETIREMENT = np.float64(65.0)
+AGE_INCREMENT_PER_STEP = np.float64(0.5)
+STEPS_PER_YEAR = np.float64(2.0)
+
+
 class Scientist(mesa.Agent):
     curiosity: np.float64
     epsilon: np.float64
     prestige: np.float64
     prestige_visibility: np.float64
     prestige_vanishing: np.float64
-    age: int
+    age: np.float64
     last_tile_knowledge: np.float64
     model: MyModel
     visibility: np.float64
@@ -40,7 +47,7 @@ class Scientist(mesa.Agent):
         self.prestige = np.float64(0.0)
         self.prestige_visibility = np.float64(0.0)
         self.prestige_vanishing = np.float64(0.0)
-        self.age = 23
+        self.age = AGE_AT_ENTRY
         self.last_tile_knowledge = np.float64(0.0)
         self.model = model
         self.visibility = 0
@@ -54,6 +61,23 @@ class Scientist(mesa.Agent):
         self.harvest_profile = np.zeros(model.size**2, dtype=np.float64)
         self._pending_prestige = np.float64(0.0)
         self._pending_tile = None
+
+    @property
+    def tenure_steps(self) -> np.float64:
+        """Career tenure in model steps under the ADR-0003 clock.
+
+        Entry age is 25 and one step is six months, so
+        ``tenure_steps = 2 * (age - 25)``; at age 65 a scientist has
+        completed ``tau_max = 80`` steps.
+        """
+        return np.float64(
+            STEPS_PER_YEAR * (self.age - AGE_AT_ENTRY)
+        )
+
+    @property
+    def tenure(self) -> np.float64:
+        """Alias for :attr:`tenure_steps` (P-0009's ``agent.tenure``)."""
+        return self.tenure_steps
 
     def compute_distance(self, other_pos: tuple[int, int]) -> int:
         x1, y1 = self.pos
@@ -224,7 +248,7 @@ class Scientist(mesa.Agent):
         knowledge_before = self.model.compute_knowledge(self.pos)
         self.model.farm(self.pos, self)  # farming also updates AvgAgentKnowledge
 
-        self.age += 1
+        self.age += AGE_INCREMENT_PER_STEP
         self.last_tile_knowledge = self.model.grid.properties["knowledge"].data[
             self.pos
         ]

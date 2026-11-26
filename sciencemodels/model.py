@@ -21,7 +21,21 @@ from mesa.space import Coordinate, PropertyLayer
 from numpy.random import Generator
 
 from . import io, metrics, viz
-from .agents import Scientist
+from .agents import (
+    AGE_AT_ENTRY,
+    AGE_AT_RETIREMENT,
+    Scientist,
+)
+
+
+#: ADR-0003 canonical values.  One step is six months, a full career is
+#: 40 years = 80 steps, and the canonical entry rate renews N = 20 over one
+#: 80-step generation (20 / 80 = 0.25 newcomers per step).
+CANONICAL_AGENT_GENERATION_TIME = np.float64(0.25)
+CANONICAL_TAU_MAX = 80
+CANONICAL_VANISHING_FACTOR = np.float64(0.5 ** (1.0 / 10.0))  # 5-year half-life
+
+EXIT_MODES = ("none", "fixed_span", "age_hazard_sync", "age_hazard_staggered")
 
 
 class MyModel(mesa.Model):
@@ -39,6 +53,8 @@ class MyModel(mesa.Model):
     avg_current_agent_knowledge: np.float64
     agent_avg_distance: np.float64
     entry_prestige_stock: str
+    exit_mode: str
+    tau_max: int
     dyadic_mode: str
     dyadic_lambda: np.float64
     dyadic_proposal_regime: str
@@ -110,7 +126,27 @@ class MyModel(mesa.Model):
             )
             a = Scientist(self, w, self.epsilon)
             coords = (self.rng.integers(0, self.size), self.rng.integers(0, self.size))
-            a.age = self.rng.choice(np.arange(23, 50))
+            # ADR-0003 founders: synchronous mode starts the whole cohort at
+            # entry age (retirement at step tau_max); fixed_span and staggered
+            # hazard draw an initial age uniformly over the 25-65 career
+            # window.  The immortal control keeps the legacy 23-49 draw as a
+            # mapped stagger index: that leaves the PCG64 cache state
+            # (has_uint32) exactly as the pre-ADR model did, so
+            # exit_mode="none" keeps the old dynamics bit-identical.
+            if self.exit_mode == "age_hazard_sync":
+                a.age = AGE_AT_ENTRY
+            elif self.exit_mode == "none":
+                legacy_age_index = self.rng.choice(np.arange(23, 50))
+                a.age = np.float64(
+                    AGE_AT_ENTRY
+                    + (legacy_age_index - 23)
+                    * (AGE_AT_RETIREMENT - AGE_AT_ENTRY)
+                    / 26.0
+                )
+            else:
+                a.age = np.float64(
+                    self.rng.uniform(AGE_AT_ENTRY, AGE_AT_RETIREMENT)
+                )
             self.grid.place_agent(a, coords)
             self.grid.properties["explored"].data[coords] = True
             a.last_tile_knowledge = self.grid.properties["knowledge"].data[coords]
@@ -137,7 +173,9 @@ class MyModel(mesa.Model):
         agent_generation_function: Callable[
             [np.float64, Generator, Dict], np.float64
         ] = lambda cur, rng, params: cur,
-        vanishing_factor_for_prestige: np.float64 = np.float64(0.9),
+        vanishing_factor_for_prestige: np.float64 = CANONICAL_VANISHING_FACTOR,
+        exit_mode: str = "none",
+        tau_max: int = CANONICAL_TAU_MAX,
         use_visibility_reward: bool = True,
         knowledge_normalization: str = "share",
         prestige_accrual: str = "harvested",
@@ -166,6 +204,18 @@ class MyModel(mesa.Model):
         self.use_distance = use_distance
         self.step_limit = step_limit
         self.vanishing_factor_for_prestige = vanishing_factor_for_prestige
+        if exit_mode not in EXIT_MODES:
+            raise ValueError(
+                "exit_mode must be one of " + repr(EXIT_MODES)
+                + ", got " + repr(exit_mode)
+            )
+        if not isinstance(tau_max, (int, np.integer)) or tau_max <= 0:
+            raise ValueError(
+                "tau_max must be a positive integer number of steps, got "
+                + repr(tau_max)
+            )
+        self.exit_mode = exit_mode
+        self.tau_max = int(tau_max)
         self.use_visibility_reward = use_visibility_reward
         self.agent_generation_function = agent_generation_function
         if knowledge_normalization not in ("share", "minmax"):
@@ -298,6 +348,15 @@ class MyModel(mesa.Model):
             model_reporters={
                 "Step": lambda m: m.steps,
                 "mean_age": lambda m: m.agents.agg("age", np.mean),
+                # P-0009 turnover measure: recent arrivals (tenure < 20
+                # steps, one canonical generation at g = 0.25) versus
+                # established agents.  The 10-step variant is kept as a
+                # sensitivity column; both are NaN when one side is empty.
+                "gap_recent": lambda m: m.recent_arrival_prestige_gap(20),
+                "gap_recent_10": lambda m: m.recent_arrival_prestige_gap(10),
+                "mean_tenure": lambda m: np.mean(
+                    [a.tenure_steps for a in m._scientists]
+                ),
                 "mean_prestige": lambda m: m.agents.agg("prestige", np.mean),
                 "mean_vanishing_prestige": lambda m: m.agents.agg(
                     "prestige_vanishing", np.mean
@@ -403,7 +462,72 @@ class MyModel(mesa.Model):
             )
         self.update_knowledge()
 
+    def recent_arrival_prestige_gap(self, window_steps: int = 20) -> np.float64:
+        """Mean prestige of recent arrivals minus established agents.
+
+        "Recent" is defined by tenure, not the permanent ``is_newcomer`` flag:
+        P-0009 showed the flag becomes 100% true once founders retire, so it
+        stops contrasting anything.  The default window is 20 steps (one
+        canonical generation at ``g = 0.25``); the ``gap_recent_10`` reporter
+        carries the 10-step sensitivity window.  Returns NaN when either side
+        is empty.
+        """
+        recent = [
+            a.prestige for a in self._scientists
+            if a.tenure_steps < window_steps
+        ]
+        established = [
+            a.prestige for a in self._scientists
+            if a.tenure_steps >= window_steps
+        ]
+        if not recent or not established:
+            return np.float64(np.nan)
+        return np.float64(np.mean(recent) - np.mean(established))
+
+    def _retire_agent(self, agent):
+        """Remove an agent from the roster, the grid and the Mesa AgentSet."""
+        if agent in self._scientists:
+            self._scientists.remove(agent)
+        try:
+            self.grid.remove_agent(agent)
+        except Exception:  # noqa: BLE001 - already-removed agent is harmless
+            pass
+        try:
+            agent.remove()
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _spawn_one_from_roulette(self):
+        """One replacement newcomer via the model's supervisor rule.
+
+        Used by the age-hazard modes for one-for-one retirement replacement.
+        The roulette and placement match the scheduled-entry path, so a
+        replacement is drawn from the same ``entry_prestige_stock`` weights.
+        """
+        if not self._scientists:
+            return None
+        entry_stock = self.entry_prestige_stock
+        tuples = [(getattr(a, entry_stock), a) for a in self._scientists]
+        total = sum(getattr(a, entry_stock) for a in self._scientists)
+        val = self.rng.uniform(0, total)
+        supervisor = self._scientists[0]
+        for p, a in tuples:
+            if val <= p:
+                supervisor = a
+                break
+            val -= p
+        w = self.agent_generation_function(
+            self.initial_curiosity, self.rng, self.generation_params
+        )
+        a = Scientist(self, w, self.epsilon)
+        a.ideal_merit_cum = np.float64(0.0)
+        a.is_newcomer = True
+        self.grid.place_agent(a, supervisor.pos)
+        self._scientists.append(a)
+        return a
+
     def __generate_new_agents(self):
+        born = []
         if self.agent_generation_time > 0:
             agents_to_generate: int = np.floor(
                 self.steps * self.agent_generation_time
@@ -435,8 +559,34 @@ class MyModel(mesa.Model):
                 coords = sup.pos
                 self.grid.place_agent(a, coords)
                 self._scientists.append(a)
-            for agent in self._scientists:
-                self.grid.properties["explored"].data[agent.pos] = True
+                born.append(a)
+
+        # ADR-0003 / P-0009 turnover.  "none" leaves the legacy immortal-
+        # founder path untouched.
+        if self.exit_mode == "fixed_span":
+            # Constant population: each scheduled arrival retires the oldest
+            # active scientist (largest age; ties by smallest unique_id).
+            for _ in born:
+                if len(self._scientists) > self.number_agents:
+                    victim = max(
+                        self._scientists,
+                        key=lambda a: (a.age, -a.unique_id),
+                    )
+                    self._retire_agent(victim)
+        elif self.exit_mode in ("age_hazard_sync", "age_hazard_staggered"):
+            # Tenure-cap hazard: every agent at or beyond tau_max retires and
+            # is replaced one-for-one from the supervisor roulette.  Sync and
+            # staggered differ only in the founders' initial ages.
+            due = [
+                a for a in list(self._scientists)
+                if a.tenure_steps >= self.tau_max
+            ]
+            for a in due:
+                self._retire_agent(a)
+                self._spawn_one_from_roulette()
+
+        for agent in self._scientists:
+            self.grid.properties["explored"].data[agent.pos] = True
 
     def linked_partners(self, agent):
         """The Scientist objects ``agent`` holds an active declared link with.

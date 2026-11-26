@@ -24,6 +24,12 @@ Canary run (3 agents, seeded, 30 steps) asserting:
     lambda, and validation of the six new knobs.
 11. regression BUG-0006: unscored step-t newborns (ideal_Merit=NaN) are
     excluded from correlation_reporter rather than treated as ideal_Merit=0.
+12. ADR-0003 backward compatibility: default ``exit_mode="none"`` is
+    bit-identical to an explicit none run at the legacy gamma=0.9, keeps the
+    population growing, and the clock adds +0.5 year per step.
+13. ADR-0003 canonical turnover canary: ``exit_mode="fixed_span"``,
+    ``g=0.25``, ``gamma=0.5**(1/10)`` and ``tau_max=80`` holds N=20,
+    retires the founder cohort, and reports ``gap_recent``.
 """
 import os
 import sys
@@ -36,6 +42,9 @@ import numpy as np
 from sciencemodels import MyModel, metrics
 from sciencemodels.landscapes import Gaussian, multipleGaussians, uniform
 from sciencemodels.model import (
+    CANONICAL_AGENT_GENERATION_TIME,
+    CANONICAL_TAU_MAX,
+    CANONICAL_VANISHING_FACTOR,
     generate_data_parametric_exploration,
     probe_agent_generation_binding,
 )
@@ -461,6 +470,121 @@ def main():
     print(
         f"BUG-0006 regression OK: synth_r={synth_r:.3f}, "
         f"step20_unscored=1 (corr={got_r:+.4f}), step21_unscored=0, g0_nans=0"
+    )
+
+    # 12. ADR-0003 backward compatibility: the default exit mode is "none",
+    #     and an explicit none run at the legacy retention factor gamma=0.9
+    #     must reproduce it bit-for-bit.  The clock advances 0.5 year per step
+    #     and newcomers enter at age 25.
+    legacy_params = dict(
+        CANARY_PARAMS,
+        agent_generation_time=0.1,
+        step_limit=40,
+        vanishing_factor_for_prestige=0.9,
+    )
+    default_none = MyModel(**legacy_params)
+    explicit_none = MyModel(**dict(legacy_params, exit_mode="none"))
+    r_default = default_none.run_mode_for_bulk()
+    r_explicit = explicit_none.run_mode_for_bulk()
+    assert bits(r_default) == bits(r_explicit), (
+        "default exit_mode is not bit-identical to explicit 'none'"
+    )
+    assert r_default["exit_mode"] == "none"
+    assert r_default["tau_max"] == CANONICAL_TAU_MAX == 80
+    assert len(default_none._scientists) > CANARY_PARAMS["n_agents"], (
+        "exit_mode='none' unexpectedly retired agents"
+    )
+    assert "gap_recent" in r_default and "gap_recent_10" in r_default
+
+    clock = MyModel(
+        **dict(legacy_params, agent_generation_time=0.0, step_limit=10)
+    )
+    ages_before = [a.age for a in clock._scientists]
+    for _ in range(10):
+        clock.step(True)
+    ages_after = [a.age for a in clock._scientists]
+    assert all(b - a == 5.0 for a, b in zip(ages_before, ages_after)), (
+        "ADR-0003 clock did not add 5 years over 10 steps"
+    )
+
+    newborn_model = MyModel(
+        **dict(legacy_params, agent_generation_time=0.25, step_limit=4)
+    )
+    newborn_model.run_mode_for_bulk()
+    newborns = [
+        a for a in newborn_model._scientists
+        if getattr(a, "is_newcomer", False)
+    ]
+    assert newborns, "expected newcomers after four steps at g=0.25"
+    youngest = min(newborns, key=lambda a: a.age)
+    assert youngest.age == 25.0, youngest.age
+    assert youngest.tenure_steps == 0.0, youngest.tenure_steps
+    print(
+        "ADR-0003 backward compatibility OK: default == explicit none, "
+        f"clock +{ages_after[0] - ages_before[0]:.1f}y/10 steps, "
+        f"newcomer age={youngest.age:.1f}"
+    )
+
+    # 13. ADR-0003 canonical turnover canary.  fixed_span with one newcomer
+    #     every 4 steps (g=0.25) must hold the population at N=20 and, after
+    #     one 80-step generation, have replaced the whole founder cohort.
+    assert CANONICAL_AGENT_GENERATION_TIME == 0.25
+    assert np.isclose(CANONICAL_VANISHING_FACTOR, 0.933, atol=5e-4)
+    adr_params = dict(
+        CANARY_PARAMS,
+        n_agents=20,
+        grid_size=20,
+        initial_curiosity=0.5,
+        generation_params={"seed": 4, "std": 5, "number_gaussians": 2},
+        agent_generation_time=CANONICAL_AGENT_GENERATION_TIME,
+        step_limit=80,
+        vanishing_factor_for_prestige=CANONICAL_VANISHING_FACTOR,
+        exit_mode="fixed_span",
+        tau_max=CANONICAL_TAU_MAX,
+    )
+    adr_model = MyModel(**adr_params)
+    assert np.isclose(
+        adr_model.vanishing_factor_for_prestige, CANONICAL_VANISHING_FACTOR
+    )
+    adr_report = adr_model.run_mode_for_bulk()
+    assert adr_report["exit_mode"] == "fixed_span"
+    assert adr_report["tau_max"] == 80
+    assert len(adr_model._scientists) == 20, len(adr_model._scientists)
+    assert all(a.age >= 25.0 for a in adr_model._scientists), (
+        "an agent retired below entry age"
+    )
+    assert all(a.is_newcomer for a in adr_model._scientists), (
+        "the founder cohort was not fully replaced over tau_max steps"
+    )
+    assert np.isfinite(adr_report["gap_recent"]), adr_report["gap_recent"]
+    assert adr_report["mean_tenure"] > 0.0
+
+    # The two age-hazard variants must run with the same clock and retire at
+    # the tenure cap; helper reports on the staggered run exercise both.
+    for mode in ("age_hazard_sync", "age_hazard_staggered"):
+        hazard = MyModel(**dict(adr_params, exit_mode=mode))
+        hazard_report = hazard.run_mode_for_bulk()
+        assert hazard_report["exit_mode"] == mode
+        assert len(hazard._scientists) >= 20
+        assert all(a.age >= 25.0 for a in hazard._scientists)
+        assert "gap_recent" in hazard_report
+
+    for bad in (
+        dict(exit_mode="bogus"),
+        dict(tau_max=0),
+        dict(tau_max=-1),
+        dict(tau_max=80.5),
+    ):
+        try:
+            MyModel(**dict(CANARY_PARAMS, **bad))
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"invalid ADR-0003 knob accepted: {bad}")
+    print(
+        "ADR-0003 turnover canary OK: fixed_span N=20, founders replaced, "
+        f"gap_recent={adr_report['gap_recent']:+.4f}, "
+        "age-hazard modes and validation OK"
     )
 
     print("ALL SMOKE TESTS PASSED")
