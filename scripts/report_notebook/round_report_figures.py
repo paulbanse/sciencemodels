@@ -23,6 +23,7 @@ import textwrap
 
 import diagram_templates as T
 import round_report_data as D
+import visual_qa
 
 REPO = D.REPO
 OUT = REPO / "output" / "report_notebook_v1"
@@ -101,26 +102,460 @@ def figure_career_flows_ideal_corr(outdir: Path | str | None = None):
 
 
 # --------------------------------------------------------------------------
-# F3 -- T4 welfare: the price of visibility pressure, and its knee
+# F3 -- W_v05 welfare on the ADR-0003 clock: the price of visibility
+#       pressure, its knee, and the (reversed) entry gradient of cumulative
+#       loss.
+#
+# ADR-0003 (paper v3.5): this builder read data/welfare_v1 through
+# ``round_report_data`` (40 cells, entry 0/0.1, two gaussian legs). The
+# ADR-0003 archive keeps a different Cartesian product -- curiosity x
+# visibility-reward toggle x landscape leg x g -- on the 6-month clock, so
+# the loader lives here (parameterized ``data_root``) instead of in the
+# shared data module, and only this figure is touched by it.
 # --------------------------------------------------------------------------
-def figure_welfare(outdir: Path | str | None = None):
-    d = D.welfare_summary().copy()
-    d["loss_pos"] = -d["loss"]            # ideal_Merit is negative: loss = -sum
-    out = _outdir(outdir) / "F3_welfare_loss_vs_visibility_weight.png"
-    worst_gap = float(d["toggle_gap"].max())
-    fig, ax = T.styled_linechart(
-        d,
-        x="visibility_weight",
-        y="loss_pos",
-        group="series",
-        title=(f"Visibility pressure raises loss; toggle gap "
-               f"at most {worst_gap:.1e}"),
-        xlabel="visibility weight (1 - curiosity)",
-        ylabel="ideal-merit loss (sum over agents, positive)",
-        source=SOURCE_T4,
-        outpath=out,
+ADR_WELFARE_ROOT = "data/welfare_adr0003"
+#: pre-ADR reference (read-only) for the before/after note and its drift check
+PRE_WELFARE_RUNS = "data/remeasure_v1/w_v05_runs.csv"
+
+WELFARE_WEIGHTS = [0.1, 0.3, 0.5, 0.7, 0.9]
+WELFARE_GS = [0.125, 0.25, 0.5]
+WELFARE_MEASURES = ["ideal_merit_sum", "ideal_loss_cum", "harvested_fin"]
+Z95 = 1.96
+
+#: ADR-0003 pins quoted in the provenance note (clock, not numbers)
+ADR_PINS = ("ADR-0003 clock: 1 step = 0.5 yr, entry age 25, tau_max 80 "
+            "(40-yr careers), gamma = 0.5**(1/10) = 0.933, g in "
+            "{0.125, 0.25, 0.5}, exit_mode fixed_span, H = 200")
+
+M_TERM = "terminal ideal-merit loss (-sum over agents, positive)"
+M_CUM = "cumulative ideal-merit loss (sum over agents, positive)"
+M_REF = "reference (definitional constants and archive pins)"
+
+
+def welfare_root(data_root: Path | str | None = None) -> Path:
+    """Resolve the welfare archive root (default = the ADR-0003 archive)."""
+    return Path(data_root) if data_root is not None else REPO / ADR_WELFARE_ROOT
+
+
+def welfare_cells(data_root: Path | str | None = None) -> pd.DataFrame:
+    """One row per run of the W_v05 welfare arm (60 cells x 20 seeds)."""
+    root = welfare_root(data_root)
+    files = sorted((root / "cells").glob("*.csv"))
+    if not files:
+        # pre-ADR archives carry a single flat frame instead of cells/
+        flat = root / "w_v05_runs.csv"
+        if flat.exists():
+            d = pd.read_csv(flat)
+            d["visibility_weight"] = 1.0 - d["curiosity"]
+            d["term_loss"] = -d["ideal_merit_sum"]
+            return d
+        raise AssertionError(f"no welfare cells under {root}")
+    D._require(len(files) == 60, f"W_v05 gross cells=60, found {len(files)}")
+    frames = []
+    for f in files:
+        d = pd.read_csv(f)
+        D._require(len(d) == 20, f"{f.name}: gross seeds=20, got {len(d)}")
+        frames.append(d)
+    out = pd.concat(frames, ignore_index=True)
+    D._require(len(out) == 1200, f"W_v05 net runs=1200, got {len(out)}")
+    D._require(sorted(out["curiosity"].unique().tolist()) == WELFARE_WEIGHTS,
+               "W_v05 curiosity grid must be 0.1..0.9 by 0.2")
+    D._require(sorted(out["g"].unique().tolist()) == WELFARE_GS,
+               "W_v05 g grid must be the ADR-0003 entry grid")
+    D._require(sorted(out["leg"].unique().tolist()) == [2, 6],
+               "W_v05 landscape-leg tags must be {2, 6}")
+    D._require(sorted(out["use_visibility_reward"].unique().tolist())
+               == [False, True], "W_v05 visibility toggle must be boolean")
+    D._require(out["exit_mode"].unique().tolist() == ["fixed_span"],
+               "W_v05 exit_mode is pinned to the fixed_span regime")
+    D._require(out["tau_max"].unique().tolist() == [80], "W_v05 tau_max=80")
+    D._require(out["horizon"].unique().tolist() == [200], "W_v05 H=200")
+    D._require(out["seed"].nunique() == 20, "W_v05 seeds must be 0..19")
+    out = out.copy()
+    out["visibility_weight"] = (1.0 - out["curiosity"]).round(2)
+    out["term_loss"] = -out["ideal_merit_sum"]
+    # the two landscape-leg tags both resolve to the mgstd5 landscape in this
+    # archive; if they ever stop being seed-identical the figure must draw
+    # them as separate series instead of averaging them away.
+    if out["landscape"].nunique() == 1 and set(out["leg"].unique()) == {2, 6}:
+        keys = ["curiosity", "g", "use_visibility_reward", "seed"]
+        a = out[out["leg"] == 2].set_index(keys)
+        b = out[out["leg"] == 6].set_index(keys)
+        D._require(a.index.equals(b.index), "leg-2 / leg-6 cell keys differ")
+        for col in WELFARE_MEASURES:
+            av = a[col].to_numpy(float)
+            bv = b[col].to_numpy(float)
+            D._require(np.array_equal(av, bv, equal_nan=True),
+                       f"leg-2 / leg-6 not seed-identical on {col}")
+        out.attrs["legs_duplicated_landscape"] = str(out["landscape"].iloc[0])
+    return out
+
+
+def welfare_summary(data_root: Path | str | None = None) -> pd.DataFrame:
+    """F3's input: one row per (visibility weight, g), seed-level 95% CI.
+
+    Design axes folded into the plotted mean: the visibility-reward toggle and
+    the duplicated landscape-leg tag (verified seed-identical above). The
+    per-seed value is the mean over the folded cells, so the CI is seed
+    variation, not a design blend.
+    """
+    d = welfare_cells(data_root)
+    per_seed = d.groupby(["visibility_weight", "g", "seed"], as_index=False).agg(
+        term_loss=("term_loss", "mean"),
+        cum_loss=("ideal_loss_cum", "mean"),
+        harvested=("harvested_fin", "mean"),
+        n_cells=("term_loss", "size"),
     )
+    g = d.groupby(["visibility_weight", "g"], as_index=False).agg(
+        term_loss=("term_loss", "mean"),
+        cum_loss=("ideal_loss_cum", "mean"),
+        harvested=("harvested_fin", "mean"),
+        n_runs=("seed", "size"),
+    )
+    for col in ("term_loss", "cum_loss"):
+        stat = per_seed.groupby(["visibility_weight", "g"])[col].agg(
+            ["mean", "std", "size"])
+        ci = Z95 * stat["std"] / np.sqrt(stat["size"])
+        g[f"{col}_ci"] = [float(ci.loc[(r.visibility_weight, r.g)])
+                          for r in g.itertuples()]
+    g["series"] = [f"g = {v:.3f}" for v in g["g"]]
+    g = g.sort_values(["visibility_weight", "g"]).reset_index(drop=True)
+    D._require(len(g) == len(WELFARE_WEIGHTS) * len(WELFARE_GS),
+               f"F3 grid 5 weights x 3 g = 15 rows, got {len(g)}")
+    D._require((g["n_runs"] == 2 * 2 * 20).all(),
+               "F3 rows must carry 2 legs x 2 toggles x 20 seeds = 80 runs")
+    return g
+
+
+def welfare_toggle_gap(data_root: Path | str | None = None) -> dict:
+    """Largest |toggle effect| on any plotted point (per metric)."""
+    d = welfare_cells(data_root)
+    out = {}
+    for metric, col in (("term_loss", "term_loss"), ("cum_loss", "ideal_loss_cum")):
+        piv = (d.groupby(["visibility_weight", "g", "use_visibility_reward"])
+               [col].mean().unstack("use_visibility_reward"))
+        out[metric] = float((piv[True] - piv[False]).abs().max())
+    return out
+
+
+def welfare_reference() -> dict | None:
+    """Pre-ADR reference values, recomputed from the read-only archive.
+
+    Returns ``None`` (and the note omits the comparison) when the pre-ADR
+    archive is not present -- never a hardcoded fallback.
+    """
+    path = REPO / PRE_WELFARE_RUNS
+    if not path.exists():
+        return None
+    d = pd.read_csv(path)
+    if "origin" in d.columns:
+        origin = d["origin"].astype(str).str.upper()
+        d = d[origin.str.startswith("W")]
+    if not len(d):
+        return None
+    d = d.copy()
+    d["visibility_weight"] = (1.0 - d["curiosity"]).round(2)
+    g = d.groupby("agent_generation_time")["ideal_loss_cum"].mean()
+    hi, lo = float(g.index.max()), float(g.index.min())
+    return {
+        "path": PRE_WELFARE_RUNS,
+        "n_runs": int(len(d)),
+        "corr_term": float(np.corrcoef(d["visibility_weight"],
+                                       -d["ideal_merit_sum"])[0, 1]),
+        "corr_cum": float(np.corrcoef(d["visibility_weight"],
+                                      d["ideal_loss_cum"])[0, 1]),
+        "corr_harvest": float(np.corrcoef(d["visibility_weight"],
+                                          d["harvested_fin"])[0, 1]),
+        "loss_gradient": float(g.loc[hi] - g.loc[lo]),
+        "g_pair": (lo, hi),
+    }
+
+
+def _welfare_note(g: pd.DataFrame, corr: dict, gap: dict,
+                  ref: dict | None, spread: dict) -> list[str]:
+    """Provenance + qualification (i), every number computed from the cells."""
+    grad = float(g.loc[g["g"] == max(WELFARE_GS), "cum_loss"].mean()
+                 - g.loc[g["g"] == min(WELFARE_GS), "cum_loss"].mean())
+    src = (f"source: {ADR_WELFARE_ROOT}/cells ({len(WELFARE_WEIGHTS) * 2 * 2 * len(WELFARE_GS)}"
+           f" cells x 20 seeds = {len(g) * 80:,} runs; curiosity c x visibility-"
+           f"reward toggle x landscape leg x g). {ADR_PINS}. "
+           f"Model-internal, not calibrated (no empirical benchmark plotted).")
+    lines = [src]
+    cmp_txt = ""
+    if ref is not None:
+        cmp_txt = (f" (pre-ADR: corr {ref['corr_cum']:+.3f} / "
+                   f"{ref['corr_harvest']:+.3f}, {ref['n_runs']:,} runs in "
+                   f"{ref['path']})")
+    lines.append(
+        f"Visibility weight xi = 1 - c against cumulative ideal loss: "
+        f"corr {corr['cum']:+.3f}; against per-capita harvest: corr "
+        f"{corr['harvest']:+.3f}{cmp_txt}.")
+    flip = ""
+    if ref is not None:
+        flip = (f", and {ref['loss_gradient']:+.3f} pre-ADR (g "
+                f"{ref['g_pair'][1]:g} minus {ref['g_pair'][0]:g}: the sign "
+                f"flips)")
+    lines.append(
+        f"Qualification (i), adr0003_remeasure_v1.md: the entry gradient of "
+        f"cumulative ideal loss is {grad:+.3f} on the ADR-0003 clock (g "
+        f"{max(WELFARE_GS):g} minus {min(WELFARE_GS):g}){flip} -- fixed-span "
+        f"replacement removes the accumulation of long-lived depleted careers.")
+    lines.append(
+        f"Terminal loss converges across entry rates as visibility pressure "
+        f"rises: the three g levels sit within {spread['rel_hi']:.1f}% of their "
+        f"mean at xi={spread['w_hi']:g} and {spread['rel_mid']:.1f}% at "
+        f"xi={spread['w_mid']:g}, and separate only at low pressure where the "
+        f"loss is negligible (xi={spread['w_lo']:g}: {spread['lo_min']:.1e} to "
+        f"{spread['lo_max']:.1e}), so panel (a) draws one pooled line with the "
+        f"per-g means as open markers. Panel (b) is where g separates "
+        f"(factor {spread['cum_ratio']:.1f} at xi={spread['w_hi']:g}). Both "
+        f"landscape-leg tags (leg-2, leg-6) resolve to the same mgstd5 "
+        f"landscape and are seed-identical in this archive, so they are folded "
+        f"into one series; the visibility-reward toggle is averaged away (its "
+        f"largest effect on any point is "
+        f"{max(gap['term_loss'], gap['cum_loss']):.1e}).")
+    return lines
+
+
+def figure_welfare(outdir: Path | str | None = None,
+                   data_root: Path | str | None = None,
+                   collector: dict | None = None,
+                   close: bool = False):
+    """Draw F3 (Figure 2): welfare loss against visibility weight.
+
+    Panel (a) plots the terminal ideal-merit loss, panel (b) the cumulative
+    one; both are computed from the archive named by ``data_root``.
+    """
+    g = welfare_summary(data_root)
+    gap = welfare_toggle_gap(data_root)
+    ref = welfare_reference()
+    d = welfare_cells(data_root)
+    dedup = d[d["leg"] == 2] if set(d["leg"].unique()) == {2, 6} else d
+    corr = {
+        "term": float(np.corrcoef(dedup["visibility_weight"],
+                                  dedup["term_loss"])[0, 1]),
+        "cum": float(np.corrcoef(dedup["visibility_weight"],
+                                 dedup["ideal_loss_cum"])[0, 1]),
+        "harvest": float(np.corrcoef(dedup["visibility_weight"],
+                                     dedup["harvested_fin"])[0, 1]),
+    }
+    # pooled terminal loss (mean over g) + how far apart the g levels run
+    pooled_term = (g.groupby("visibility_weight")["term_loss"]
+                   .agg(["mean", "min", "max"]))
+    span = pooled_term["max"] - pooled_term["min"]
+    rel = span / pooled_term["mean"]
+    w_hi, w_mid, w_lo = (max(WELFARE_WEIGHTS), sorted(WELFARE_WEIGHTS)[-2],
+                         min(WELFARE_WEIGHTS))
+    cum_hi = g[g["visibility_weight"] == w_hi]["cum_loss"]
+    spread = {
+        "rel_hi": float(rel.loc[w_hi] * 100.0),
+        "rel_mid": float(rel.loc[w_mid] * 100.0),
+        "w_hi": w_hi,
+        "w_mid": w_mid,
+        "w_lo": w_lo,
+        "lo_min": float(pooled_term.loc[w_lo, "min"]),
+        "lo_max": float(pooled_term.loc[w_lo, "max"]),
+        "cum_ratio": float(cum_hi.max() / cum_hi.min()),
+    }
+    note = _welfare_note(g, corr, gap, ref, spread)
+
+    s = {**T.HOUSE_STYLE}
+    colors = {v: T.HOUSE_STYLE["colors"][i]
+              for i, v in enumerate(WELFARE_GS)}
+    fig, (axA, axB) = plt.subplots(1, 2, figsize=(11.6, 5.5), dpi=s["dpi"])
+
+    # ---------------- (a) terminal loss, pooled over g -------------------
+    for gv in WELFARE_GS:
+        sub = g[g["g"] == gv]
+        axA.plot(sub["visibility_weight"], sub["term_loss"], linestyle="none",
+                 marker="o", markersize=5.5, markerfacecolor="white",
+                 markeredgecolor=colors[gv], markeredgewidth=1.3, zorder=4,
+                 label=f"g = {gv:g} (mean)")
+    axA.plot(pooled_term.index, pooled_term["mean"], marker="s", markersize=5,
+             linewidth=2.0, color=T.PALETTE["blue"], zorder=5,
+             label="mean over g")
+    T._cosmetics(axA, s,
+                 f"(a) Terminal ideal-merit loss: corr(xi, loss) = "
+                 f"{corr['term']:+.3f}",
+                 "visibility weight xi = 1 - curiosity",
+                 M_TERM)
+
+    # ---------------- (b) cumulative loss, one line per g ----------------
+    for gv in WELFARE_GS:
+        sub = g[g["g"] == gv]
+        axB.plot(sub["visibility_weight"], sub["cum_loss"], marker="o",
+                 markersize=5, linewidth=1.8, color=colors[gv],
+                 label=f"g = {gv:g}")
+    T._cosmetics(axB, s,
+                 f"(b) Cumulative ideal loss: corr(xi, loss_cum) = "
+                 f"{corr['cum']:+.3f}",
+                 "visibility weight xi = 1 - curiosity", M_CUM)
+
+    for ax, col in ((axA, "term_loss"), (axB, "cum_loss")):
+        ax.set_xlim(min(WELFARE_WEIGHTS) - 0.05, max(WELFARE_WEIGHTS) + 0.05)
+        ax.set_xticks(WELFARE_WEIGHTS,
+                      [f"{v:g}" for v in WELFARE_WEIGHTS],
+                      fontsize=s["tick_size"])
+        # headroom: the lowest points sit an order of magnitude above zero, so
+        # the axis floor drops below zero instead of clipping them onto the
+        # spine (visual_qa's 3% headroom rule)
+        vmax = float(g[col].max())
+        ax.set_ylim(-0.08 * vmax, 1.30 * vmax)
+        lo, hi = ax.get_ylim()
+        ax.set_yticks([t for t in ax.get_yticks()
+                       if lo - 1e-12 <= t <= hi + 1e-12])
+    axA.legend(fontsize=s["tick_size"] - 0.5, frameon=False, loc="upper left",
+               labelspacing=0.25, handlelength=1.6)
+
+    # qualification (i) callout: the flip, computed from the cells
+    grad = float(g.loc[g["g"] == max(WELFARE_GS), "cum_loss"].mean()
+                 - g.loc[g["g"] == min(WELFARE_GS), "cum_loss"].mean())
+    flip_txt = (f"entry gradient of cumulative loss\n"
+                f"g {max(WELFARE_GS):g} - g {min(WELFARE_GS):g} = "
+                f"{grad:+.3f}")
+    if ref is not None:
+        flip_txt += f"\npre-ADR: {ref['loss_gradient']:+.3f} (sign flip)"
+    axB.text(0.025, 0.975, flip_txt, transform=axB.transAxes, ha="left",
+             va="top", fontsize=s["note_size"] - 0.5, zorder=6,
+             bbox=dict(boxstyle="round,pad=0.32", fc="white",
+                       ec=T.PALETTE["gray_light"], alpha=0.95))
+
+    lines: list[str] = []
+    for block in note:
+        lines.extend(textwrap.fill(block, width=188).split("\n"))
+    top, floor = 0.183, 0.014
+    step = min(0.021, (top - floor) / max(len(lines), 1))
+    y = top
+    for line in lines:
+        fig.text(0.008, y, line, fontsize=s["note_size"] - 1.5,
+                 color=T.PALETTE["gray"])
+        y -= step
+    fig.subplots_adjust(left=0.068, right=0.988, top=0.915, bottom=0.300,
+                        wspace=0.20)
+
+    rows = []
+    src = f"{ADR_WELFARE_ROOT}/cells/*.csv"
+    # panel (a): one pooled line (statistic "mean") + the per-g markers
+    for w, r in pooled_term.iterrows():
+        rows.append(dict(
+            figure="F3_welfare_loss_vs_visibility_weight", panel="a",
+            metric=M_TERM, statistic="mean", series="mean over g",
+            visibility_weight=float(w), g=np.nan, landscape="mgstd5",
+            leg="2+6 (seed-identical)", curiosity=1.0 - float(w),
+            use_visibility_reward="both (averaged)", value=float(r["mean"]),
+            ci_lo=np.nan, ci_hi=np.nan, n=60, source_file=src,
+            note="pooled terminal loss: mean over the three entry rates, the "
+                 "visibility toggle and the duplicated landscape-leg tag"))
+    for r in g.itertuples():
+        rows.append(dict(
+            figure="F3_welfare_loss_vs_visibility_weight", panel="a",
+            metric=M_TERM, statistic="cell_mean", series=f"g = {r.g:.3f}",
+            visibility_weight=float(r.visibility_weight), g=float(r.g),
+            landscape="mgstd5", leg="2+6 (seed-identical)",
+            curiosity=1.0 - float(r.visibility_weight),
+            use_visibility_reward="both (averaged)",
+            value=float(r.term_loss),
+            ci_lo=float(r.term_loss - r.term_loss_ci),
+            ci_hi=float(r.term_loss + r.term_loss_ci),
+            n=20, source_file=src,
+            note="per-g mean (open marker in panel a); seed mean folded over "
+                 "the visibility toggle and the duplicated landscape-leg tag"))
+    # panel (b): one line per g
+    for r in g.itertuples():
+        rows.append(dict(
+            figure="F3_welfare_loss_vs_visibility_weight", panel="b",
+            metric=M_CUM, statistic="mean", series=f"g = {r.g:.3f}",
+            visibility_weight=float(r.visibility_weight), g=float(r.g),
+            landscape="mgstd5", leg="2+6 (seed-identical)",
+            curiosity=1.0 - float(r.visibility_weight),
+            use_visibility_reward="both (averaged)",
+            value=float(r.cum_loss),
+            ci_lo=float(r.cum_loss - r.cum_loss_ci),
+            ci_hi=float(r.cum_loss + r.cum_loss_ci),
+            n=20, source_file=src,
+            note="seed mean folded over the visibility toggle and the "
+                 "duplicated landscape-leg tag; 95% CI = 1.96*SE over "
+                 "the 20 per-seed values"))
+    ann = [
+        ("annotation: corr_xi_terminal_loss", corr["term"], M_TERM,
+         f"run-level corr(1 - curiosity, -ideal_merit_sum) = {corr['term']:+.4f}"),
+        ("annotation: corr_xi_cumulative_loss", corr["cum"], M_CUM,
+         f"run-level corr(1 - curiosity, ideal_loss_cum) = {corr['cum']:+.4f}"),
+        ("annotation: corr_xi_harvest", corr["harvest"], M_CUM,
+         f"run-level corr(1 - curiosity, harvested_fin) = {corr['harvest']:+.4f}"),
+        ("annotation: loss_gradient_high_minus_low_g", grad, M_CUM,
+         f"mean ideal_loss_cum at g={max(WELFARE_GS):g} minus "
+         f"g={min(WELFARE_GS):g} = {grad:+.4f} (qualification i)"),
+        ("annotation: max_toggle_gap_terminal", gap["term_loss"], M_TERM,
+         f"largest |visibility-toggle effect| on a plotted point = "
+         f"{gap['term_loss']:.3e}"),
+        ("annotation: max_toggle_gap_cumulative", gap["cum_loss"], M_CUM,
+         f"largest |visibility-toggle effect| on a plotted point = "
+         f"{gap['cum_loss']:.3e}"),
+    ]
+    if ref is not None:
+        ann += [
+            ("annotation: pre_adr_corr_xi_cumulative_loss", ref["corr_cum"],
+             M_REF, f"pre-ADR corr(1 - c, ideal_loss_cum) = {ref['corr_cum']:+.4f}"),
+            ("annotation: pre_adr_corr_xi_harvest", ref["corr_harvest"],
+             M_REF, f"pre-ADR corr(1 - c, harvested_fin) = {ref['corr_harvest']:+.4f}"),
+            ("annotation: pre_adr_loss_gradient", ref["loss_gradient"], M_REF,
+             f"pre-ADR mean ideal_loss_cum at g={ref['g_pair'][1]:g} minus "
+             f"g={ref['g_pair'][0]:g} = {ref['loss_gradient']:+.4f}"),
+        ]
+    for series, value, metric, text in ann:
+        rows.append(dict(
+            figure="F3_welfare_loss_vs_visibility_weight", panel="note",
+            metric=metric, statistic="annotation" if metric != M_REF
+            else "definitional constant", series=series,
+            visibility_weight=np.nan, g=np.nan, landscape="", leg="",
+            curiosity=np.nan, use_visibility_reward="", value=float(value),
+            ci_lo=np.nan, ci_hi=np.nan, n=np.nan,
+            source_file=src if metric != M_REF else PRE_WELFARE_RUNS,
+            note=text))
+    for cat, val, text in [
+        ("weights", len(WELFARE_WEIGHTS), "visibility weights 0.1..0.9"),
+        ("g_levels", len(WELFARE_GS), "entry rates 0.125/0.25/0.5"),
+        ("cells", 60, "cell CSVs in the archive"),
+        ("seeds_per_cell", 20, "seed rows per cell CSV"),
+        ("tau_max", 80, "ADR-0003 career horizon in steps"),
+        ("horizon", 200, "run horizon in steps"),
+        ("gamma", 0.5 ** (1.0 / 10.0), "5-yr retention half-life"),
+        ("z95", Z95, "95% CI multiplier (house convention)"),
+    ]:
+        rows.append(dict(
+            figure="F3_welfare_loss_vs_visibility_weight", panel="ref",
+            metric=M_REF, statistic="definitional constant", series=cat,
+            visibility_weight=np.nan, g=np.nan, landscape="", leg="",
+            curiosity=np.nan, use_visibility_reward="", value=float(val),
+            ci_lo=np.nan, ci_hi=np.nan, n=np.nan, source_file="ADR-0003 pins",
+            note=text))
+    sidecar = pd.DataFrame(rows)
+
+    specs = [
+        {"ax": axA, "metric": M_TERM,
+         "expect_lines": len(WELFARE_GS) + 1,
+         "points_per_line": len(WELFARE_WEIGHTS), "sidecar": sidecar,
+         "filters": {"panel": "a"}, "ci_cols": ("value", "value")},
+        {"ax": axB, "metric": M_CUM, "expect_lines": len(WELFARE_GS),
+         "points_per_line": len(WELFARE_WEIGHTS), "sidecar": sidecar,
+         "filters": {"panel": "b"}, "ci_cols": ("value", "value")},
+    ]
+    report = visual_qa.assert_figure_clean(fig, specs)
+
+    out = _outdir(outdir) / "F3_welfare_loss_vs_visibility_weight.png"
+    fig.savefig(out, dpi=s["dpi"])
+    fig.savefig(out.with_suffix(".pdf"))
+    csv_path = T.write_figure_data(sidecar, out)
+    if collector is not None:
+        collector["fig"] = fig
+        collector["sidecar"] = sidecar
+    if close:
+        plt.close(fig)
+    print(f"F3: {out} | {out.with_suffix('.pdf')} | {csv_path} | "
+          f"visual_qa failures: {report['_total']}")
     return fig, out
+
 
 
 # --------------------------------------------------------------------------
@@ -615,3 +1050,175 @@ def build_all(outdir: Path | str | None = None) -> pd.DataFrame:
                      "png": str(out.relative_to(REPO)),
                      "bytes": out.stat().st_size})
     return pd.DataFrame(rows)
+
+
+# --------------------------------------------------------------------------
+# F3 verifier: recompute every plotted value from the cells, independently of
+# the builder, and re-run the visual QA contract on a fresh canvas.
+# --------------------------------------------------------------------------
+F3_FILENAME = "F3_welfare_loss_vs_visibility_weight"
+
+
+def verify_welfare(outdir: Path | str | None = None,
+                   data_root: Path | str | None = None,
+                   tol: float = 1e-9) -> list[str]:
+    """Self-contained check of the F3 sidecar against the raw cells."""
+    import tempfile
+
+    fails: list[str] = []
+    out = Path(outdir) if outdir else OUT
+    if not out.is_absolute():
+        out = REPO / out
+    csv_path = out / f"{F3_FILENAME}_data.csv"
+    root = welfare_root(data_root)
+    files = sorted((root / "cells").glob("*.csv"))
+    if len(files) != 60:
+        return [f"W_v05 gross cells=60 expected, found {len(files)}"]
+    frames = []
+    for f in files:
+        d = pd.read_csv(f)
+        if len(d) != 20:
+            fails.append(f"{f.name}: 20 seed rows expected, found {len(d)}")
+        frames.append(d)
+    if fails:
+        return fails
+    d = pd.concat(frames, ignore_index=True)
+    if len(d) != 1200:
+        fails.append(f"W_v05 runs: 1200 expected, found {len(d)}")
+    if sorted(d["curiosity"].unique().tolist()) != WELFARE_WEIGHTS:
+        fails.append("W_v05 curiosity grid is not 0.1..0.9 by 0.2")
+    if sorted(d["g"].unique().tolist()) != WELFARE_GS:
+        fails.append("W_v05 g grid is not the ADR-0003 grid")
+    d = d.copy()
+    d["w"] = 1.0 - d["curiosity"]
+    d["term"] = -d["ideal_merit_sum"]
+
+    # structural claims carried by the figure
+    corr_cum = float(np.corrcoef(d["w"], d["ideal_loss_cum"])[0, 1])
+    corr_harv = float(np.corrcoef(d["w"], d["harvested_fin"])[0, 1])
+    if not corr_cum > 0.5:
+        fails.append(f"visibility-pressure claim broken: corr(xi, loss_cum) "
+                     f"{corr_cum:+.4f} is not clearly positive")
+    if not corr_harv < -0.4:
+        fails.append(f"visibility-pressure claim broken: corr(xi, harvest) "
+                     f"{corr_harv:+.4f} is not clearly negative")
+    gmean = d.groupby("g")["ideal_loss_cum"].mean()
+    grad = float(gmean.loc[max(WELFARE_GS)] - gmean.loc[min(WELFARE_GS)])
+    if not grad < 0:
+        fails.append(f"qualification (i) broken: cumulative-loss entry "
+                     f"gradient {grad:+.4f} does not fall with g")
+
+    exp = (d.groupby(["w", "g"], as_index=False)
+           .agg(term=("term", "mean"), cum=("ideal_loss_cum", "mean")))
+    exp_pooled = d.groupby("w")["term"].mean()
+    if not csv_path.exists():
+        return fails + [f"sidecar missing: {csv_path}"]
+    full = pd.read_csv(csv_path)
+    got = full[full["statistic"].isin(["mean", "cell_mean"])]
+    n_expect = len(WELFARE_WEIGHTS) + 2 * len(WELFARE_WEIGHTS) * len(WELFARE_GS)
+    if len(got) != n_expect:
+        fails.append(f"sidecar plotted rows: {n_expect} expected, "
+                     f"found {len(got)}")
+        return fails
+
+    # panel (a): the pooled line
+    pool = got[(got["panel"] == "a") & (got["statistic"] == "mean")]
+    if len(pool) != len(WELFARE_WEIGHTS):
+        fails.append(f"panel a: {len(WELFARE_WEIGHTS)} pooled points "
+                     f"expected, found {len(pool)}")
+    for w, ref in exp_pooled.items():
+        row = pool[np.isclose(pool["visibility_weight"], w)]
+        if len(row) != 1:
+            fails.append(f"panel a: no unique pooled row for w={w:g}")
+            continue
+        v = float(row["value"].iloc[0])
+        if abs(v - float(ref)) > tol:
+            fails.append(f"panel a pooled w={w:g}: sidecar {v!r} != "
+                         f"recomputed {float(ref)!r}")
+    # panel (a): the per-g markers
+    cells_a = got[(got["panel"] == "a") & (got["statistic"] == "cell_mean")]
+    if len(cells_a) != len(WELFARE_WEIGHTS) * len(WELFARE_GS):
+        fails.append(f"panel a: 15 per-g markers expected, "
+                     f"found {len(cells_a)}")
+    # panel (b): one line per g
+    cells_b = got[(got["panel"] == "b") & (got["statistic"] == "mean")]
+    if len(cells_b) != len(WELFARE_WEIGHTS) * len(WELFARE_GS):
+        fails.append(f"panel b: 15 plotted points expected, "
+                     f"found {len(cells_b)}")
+    if not (cells_b["metric"] == M_CUM).all():
+        fails.append("panel b: metric label mismatch")
+    if not (cells_a["metric"] == M_TERM).all():
+        fails.append("panel a: metric label mismatch")
+
+    for sub, col, panel in ((cells_a, "term", "a"), (cells_b, "cum", "b")):
+        for r in exp.itertuples():
+            row = sub[(np.isclose(sub["visibility_weight"], r.w))
+                      & (np.isclose(sub["g"], r.g))]
+            if len(row) != 1:
+                fails.append(f"panel {panel}: no unique row for "
+                             f"w={r.w}/g={r.g}")
+                continue
+            v = float(row["value"].iloc[0])
+            ref = float(getattr(r, col))
+            if abs(v - ref) > tol:
+                fails.append(f"panel {panel} w={r.w}/g={r.g}: sidecar {v!r} "
+                             f"!= recomputed {ref!r}")
+            lo, hi = float(row["ci_lo"].iloc[0]), float(row["ci_hi"].iloc[0])
+            if not (lo <= v <= hi):
+                fails.append(f"panel {panel} w={r.w}/g={r.g}: CI does not "
+                             f"bracket the point")
+            if int(row["n"].iloc[0]) != 20:
+                fails.append(f"panel {panel} w={r.w}/g={r.g}: n must be 20")
+
+    # the rendered callout must carry the recomputed gradient
+    ann = full[(full["statistic"] == "annotation")
+               & (full["series"] == "annotation: loss_gradient_high_minus_low_g")]
+    if len(ann) != 1:
+        fails.append("sidecar: the qualification-(i) gradient annotation is "
+                     "missing")
+    elif abs(float(ann["value"].iloc[0]) - grad) > tol:
+        fails.append(f"gradient annotation {float(ann['value'].iloc[0])!r} "
+                     f"!= recomputed {grad!r}")
+
+    # visual QA re-run on a fresh canvas, plus a sidecar round-trip
+    tmp = Path(tempfile.mkdtemp(prefix="f3_"))
+    col: dict = {}
+    figure_welfare(tmp, data_root=data_root, collector=col, close=False)
+    try:
+        visual_qa.assert_figure_clean(col["fig"], [
+            {"ax": ax, "metric": m,
+             "expect_lines": len(WELFARE_GS) + (1 if p == "a" else 0),
+             "points_per_line": len(WELFARE_WEIGHTS), "sidecar": full,
+             "filters": {"panel": p}, "ci_cols": ("value", "value")}
+            for ax, m, p in zip(col["fig"].axes, (M_TERM, M_CUM), ("a", "b"))
+        ])
+    except AssertionError as exc:
+        fails.append(f"visual QA re-run failed: {exc}")
+    regot = pd.read_csv(tmp / f"{F3_FILENAME}_data.csv")
+    regot = regot[regot["statistic"].isin(["mean", "cell_mean"])]
+    if len(regot) != len(got):
+        fails.append(f"regenerated sidecar has {len(regot)} plotted rows, "
+                     f"expected {len(got)}")
+    else:
+        key = ["panel", "statistic", "series", "visibility_weight", "g"]
+        j = got.merge(regot, on=key, suffixes=("_a", "_b"))
+        if len(j) != len(got):
+            fails.append("regenerated sidecar rows do not pair 1:1 with the "
+                         "published sidecar")
+        dv = np.abs(j["value_a"].to_numpy(float) - j["value_b"].to_numpy(float))
+        if not np.all(np.nan_to_num(dv) <= tol):
+            fails.append("regenerated sidecar values differ from the rebuild")
+    plt.close(col["fig"])
+    return fails
+
+
+if __name__ == "__main__":  # pragma: no cover
+    # F3 ONLY: building the whole module would rewrite every legacy figure.
+    _fig, _out = figure_welfare(close=False)
+    _fails = verify_welfare()
+    print("verify_F3_welfare: " +
+          ("all checks passed" if not _fails else f"{len(_fails)} FAIL(s)"))
+    for _f in _fails:
+        print(f"FAIL {_f}")
+    raise SystemExit(1 if _fails else 0)
+

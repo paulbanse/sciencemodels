@@ -1,28 +1,32 @@
-"""Independent verifier for F10b_v2 (figF_v2_m2_visibility_postbug.py).
+"""Independent verifier for ``F10b_v2_m2_visibility_like_for_like`` (Fig 16).
 
 ``check(outdir="output/report_notebook_v1", data_root=None, tol=1e-9)``
-returns a list of failures -- empty means everything reconciles.
+returns a list of failures; empty means everything reconciles.
 
-Independence: M0/M1 are re-read from ``w_v05_runs.csv`` and M2 from
-``m2_xi_runs.csv`` with this module's own selectors; every plotted mean,
-CI, annotation and the Klann reference row is recomputed here and compared
-against ``F10b_v2_m2_visibility_like_for_like_data.csv``.  The pre-vs-post
-BUG-0006 numbers quoted on the canvas are re-read from the archived delta
-tables (``tables/m2_xi_bug0006_delta.csv``, ``tables/w_v05_bug0006_delta.csv``).
+Independence: ``data/fig1_xi_adr0003/cells/fig1_tier-*_xi-*.csv`` is re-read
+here with this module's own filename parser and tier map (nothing is imported
+from ``figF_v2_m2_visibility_postbug``), and every plotted mean, 95% CI and
+annotation is recomputed and compared against the ``*_data.csv`` sidecar.
 
-Two regression guards for the defects this figure was commissioned to fix:
-  * no text artist in any panel reads as a bare "0" (the pre-fix stray
-    label just above panel B's zero line);
-  * no vertical band-boundary rule survives in any panel (the pre-fix
-    dashed axvlines that crossed every series and panel B's annotation).
+Guards this verifier enforces:
+  * the archive shape the figure claims: 55 cells x 20 seeds = 1,100 runs,
+    5 tiers, 11 xi points, mgstd5, one H pin per tier;
+  * panel (c) draws ONLY tiers whose population matches the modal one -- the
+    staggered M1 tier (N = 121) must not appear as a team-size series, because
+    team size is a level and a 121-agent pool is not comparable to a 20-agent
+    one.  Its population is asserted here from the cells;
+  * two rendering regressions: no text artist reads as a bare "0" (the pre-fix
+    stray label above panel B's zero line) and no vertical band-boundary rule
+    survives in any panel (the bands are shaded regions only).
 
-Finally the figure is rebuilt in memory and the shared
-``visual_qa.assert_figure_clean`` contract is re-run on the rendered canvas.
+Finally the figure is rebuilt in memory and ``visual_qa.assert_figure_clean``
+re-runs on the rendered canvas.
+
+Run:  MPLBACKEND=Agg /opt/hermes/.venv/bin/python scripts/report_notebook/verify_F10b_v2.py
 """
-
 from __future__ import annotations
 
-import importlib.util
+import re
 import sys
 from pathlib import Path
 
@@ -36,271 +40,213 @@ if str(HERE) not in sys.path:
 import visual_qa  # noqa: E402
 
 FNAME = "F10b_v2_m2_visibility_like_for_like"
-DEFAULT_DATA_ROOT = REPO / "data" / "bug0006_remeasure_v2"
+DEFAULT_ROOT = REPO / "data" / "fig1_xi_adr0003"
 LANDSCAPE = "mgstd5"
-XIS = (0.1, 0.3, 0.5, 0.7, 0.9)
 Z95 = 1.96
 KLANN_TEAM_SIZE = 2.65
+BENCH_LABEL = "Empirical benchmark (unfitted)"
 
-M0 = "M0 (g = 0)"
-M1 = "M1 (g = 0.1)"
-M2_TIERS = {0.0: "M2 λ = 0 (prestige matching)",
-            1.0: "M2 λ = 1 (closeness × local merit)"}
-TIERS = (M0, M1, M2_TIERS[0.0], M2_TIERS[1.0])
-ENTRY_ARMS = (M1, M2_TIERS[0.0], M2_TIERS[1.0])
 M_HARVEST = "harvested knowledge share"
 M_CORR = "Corr(prestige, ideal merit) (time mean)"
 M_TEAM = "co-harvest team size (time mean)"
-PANELS = {"a": M_HARVEST, "b": M_CORR, "c": M_TEAM}
+
+T0 = "M0 (g = 0)"
+T1F = "M1 (g = 0.25), fixed span"
+T1S = "M1 (g = 0.25), staggered"
+T20 = "M2 λ = 0 (prestige matching)"
+T21 = "M2 λ = 1 (closeness × local merit)"
+TIERS = (T0, T1F, T1S, T20, T21)
+ENTRY_ARMS = (T1F, T1S, T20, T21)
+TIER_CODE = {"M0": T0, "M1_fixed": T1F, "M1_staggered": T1S,
+             "M2_l0": T20, "M2_l1": T21}
+
+_FILE_RE = re.compile(r"fig1_tier-(?P<tier>[A-Za-z0-9_]+)_xi-(?P<xi>\d+p\d+)\.csv")
 
 
-def _mean_ci(v) -> tuple[float, float, float, int]:
-    a = np.asarray(v, dtype=float)
+def _mean_ci(v):
+    a = pd.Series(v, dtype=float).dropna()
     n = int(a.size)
     m = float(a.mean())
     h = Z95 * float(a.std(ddof=1)) / np.sqrt(n) if n > 1 else float("nan")
     return m, m - h, m + h, n
 
 
-def _root(data_root) -> Path:
-    return Path(data_root) if data_root is not None else DEFAULT_DATA_ROOT
+def load(data_root=None) -> tuple[pd.DataFrame, dict]:
+    root = Path(data_root) if data_root is not None else DEFAULT_ROOT
+    if not root.is_absolute():
+        root = REPO / root
+    files = sorted((root / "cells").glob("fig1_tier-*.csv"))
+    if not files:
+        raise AssertionError(f"no fig1 cells under {root}/cells")
+    frames = []
+    for f in files:
+        m = _FILE_RE.match(f.name)
+        if m is None:
+            raise AssertionError(f"unparsable cell filename {f.name}")
+        d = pd.read_csv(f)
+        if len(d) != 20:
+            raise AssertionError(f"{f.name}: {len(d)} seed rows, expected 20")
+        d["tier_label"] = TIER_CODE.get(m.group("tier"))
+        d["xi_fn"] = float(m.group("xi").replace("p", "."))
+        frames.append(d)
+    runs = pd.concat(frames, ignore_index=True)
+    if runs["tier_label"].isna().any():
+        raise AssertionError(f"unmapped tier codes in filenames")
+    if not np.allclose(runs["xi"], runs["xi_fn"]):
+        raise AssertionError("xi column disagrees with the filename")
+    pins = dict(files=len(files),
+                cells=runs.groupby(["tier_label", "xi"]).ngroups,
+                runs=len(runs), seeds=int(runs["seed"].nunique()),
+                xs=sorted(runs["xi"].unique().tolist()),
+                landscapes=sorted(runs["landscape"].unique().tolist()),
+                horizon=runs.groupby("tier_label")["horizon"].first().to_dict())
+    return runs, pins
 
 
-def _load_cells(data_root):
-    root = _root(data_root)
-    fails: list[str] = []
-    exp: dict[tuple, tuple] = {}
-
-    w = pd.read_csv(root / "w_v05_runs.csv")
-    wv = w[(w["landscape"] == LANDSCAPE)
-           & (w["use_visibility_reward"] == True)].copy()  # noqa: E712
-    if len(wv) != 200:
-        fails.append(f"w_v05 mgstd5+visibility: {len(wv)} runs, expected 200")
-    if set(np.round(wv["vanishing"], 3)) != {0.5}:
-        fails.append("w_v05: vanishing pin is not the single value 0.5")
-    wv["xi"] = np.round(1.0 - wv["curiosity"], 1)
-    if sorted(set(wv["xi"])) != list(XIS):
-        fails.append(f"w_v05: xi grid {sorted(set(wv['xi']))}")
-    for g, tier in ((0.0, M0), (0.1, M1)):
-        for xi in XIS:
-            sel = wv[(np.round(wv["agent_generation_time"], 2) == g)
-                     & (wv["xi"] == xi)]
-            if len(sel) != 20:
-                fails.append(f"w_v05 {tier} xi={xi}: {len(sel)} runs")
-            for panel, col in (("a", "harvested_fin"), ("b", "c_ideal_tm")):
-                exp[(panel, tier, xi)] = _mean_ci(sel[col])
-
-    m = pd.read_csv(root / "m2_xi_runs.csv")
-    if len(m) != 200:
-        fails.append(f"m2_xi: {len(m)} runs, expected 200")
-    if set(np.round(m["vanishing"], 3)) != {0.9}:
-        fails.append("m2_xi: vanishing pin is not the single value 0.9")
-    if not (m["landscape"] == LANDSCAPE).all():
-        fails.append("m2_xi: landscape is not uniformly mgstd5")
-    if not (m["use_visibility_reward"] == True).all():  # noqa: E712
-        fails.append("m2_xi: visibility reward is not uniformly on")
-    if set(np.round(m["dyadic_move_pull"], 3)) != {1.0}:
-        fails.append("m2_xi: pull is not uniformly 1.0")
-    m["xi"] = np.round(m["xi"], 1)
-    if sorted(set(m["xi"])) != list(XIS):
-        fails.append(f"m2_xi: xi grid {sorted(set(m['xi']))}")
-    for lam, tier in M2_TIERS.items():
-        for xi in XIS:
-            sel = m[(np.round(m["dyadic_lambda"], 1) == lam) & (m["xi"] == xi)]
-            if len(sel) != 20:
-                fails.append(f"m2 {tier} xi={xi}: {len(sel)} runs")
-            for panel, col in (("a", "harvested_fin"), ("b", "c_ideal_tm"),
-                               ("c", "team_tm")):
-                exp[(panel, tier, xi)] = _mean_ci(sel[col])
-
-    want = 2 * len(TIERS) * len(XIS) + len(M2_TIERS) * len(XIS)
-    if len(exp) != want:
-        fails.append(f"{len(exp)} expected cells, expected {want}")
-    return exp, fails
+def team_tiers(runs: pd.DataFrame) -> tuple:
+    """Tiers whose population matches the modal one (team size is a level)."""
+    pop = runs.groupby("tier_label")["n_final"].mean()
+    modal = float(pop.round().mode().iloc[0])
+    return tuple(t for t in TIERS
+                 if t in pop.index and abs(pop[t] - modal) <= 0.75 * modal)
 
 
-def _expected_annotations(exp, data_root):
-    v = {k: val[0] for k, val in exp.items()}
-    out: dict[tuple, float] = {}
+def expected(runs: pd.DataFrame, pins: dict) -> pd.DataFrame:
+    rows = []
+    keep_c = team_tiers(runs)
+    for panel, metric, col in (("a", M_HARVEST, "harvested_fin"),
+                               ("b", M_CORR, "c_ideal_tm"),
+                               ("c", M_TEAM, "team_tm")):
+        for tier in (TIERS if panel != "c" else keep_c):
+            for xi in pins["xs"]:
+                sel = runs[(runs["tier_label"] == tier) & (runs["xi"] == xi)][col]
+                if sel.notna().sum() == 0:
+                    continue
+                m, lo, hi, n = _mean_ci(sel)
+                rows.append(dict(panel=panel, metric=metric, statistic="mean",
+                                 tier=tier, xi=xi, value=m, ci_lo=lo, ci_hi=hi,
+                                 n=n))
+    rows.append(dict(panel="c", metric=M_TEAM, statistic="reference",
+                     tier=BENCH_LABEL, xi=np.nan, value=KLANN_TEAM_SIZE,
+                     ci_lo=np.nan, ci_hi=np.nan, n=0))
+    V = {(r["panel"], r["tier"], float(r["xi"])): r["value"] for r in rows
+         if r["statistic"] == "mean"}
 
-    plateau = [v[("a", t, xi)] for t in ENTRY_ARMS for xi in (0.1, 0.3, 0.5)]
-    collapse = [v[("a", t, 0.9)] for t in ENTRY_ARMS]
-    out[("a", "entry_plateau_harvested_min")] = min(plateau)
-    out[("a", "entry_plateau_harvested_max")] = max(plateau)
-    out[("a", "stage2_collapse_min")] = min(collapse)
-    out[("a", "stage2_collapse_max")] = max(collapse)
-    out[("a", "m0_xi09_harvested")] = v[("a", M0, 0.9)]
+    def ann(panel, metric, value):
+        rows.append(dict(panel=panel, metric=metric, statistic="annotation",
+                         tier="", xi=np.nan, value=float(value), ci_lo=np.nan,
+                         ci_hi=np.nan, n=100))
+
+    plateau = [V[("a", t, xi)] for t in ENTRY_ARMS for xi in pins["xs"]
+               if xi <= 0.5]
+    tail = [V[("a", t, xi)] for t in ENTRY_ARMS for xi in pins["xs"] if xi >= 0.9]
+    ann("a", "entry_plateau_harvested_min", min(plateau))
+    ann("a", "entry_plateau_harvested_max", max(plateau))
+    ann("a", "stage2_collapse_min", min(tail))
+    ann("a", "stage2_collapse_max", max(tail))
+    ann("a", "m0_min_harvested", min(V[("a", T0, xi)] for xi in pins["xs"]))
     for tier in TIERS:
-        out[("b", f"c_tm_xi01::{tier}")] = v[("b", tier, 0.1)]
-        out[("b", f"c_tm_xi09::{tier}")] = v[("b", tier, 0.9)]
-    lam0 = [v[("b", M2_TIERS[0.0], xi)] for xi in XIS]
-    out[("b", "m2_lambda0_flat_min")] = min(lam0)
-    out[("b", "m2_lambda0_flat_max")] = max(lam0)
-    small = [v[("c", t, xi)] for t in M2_TIERS.values() for xi in (0.1, 0.3, 0.5)]
-    out[("c", "team_small_min")] = min(small)
-    out[("c", "team_small_max")] = max(small)
-    for xi, key in ((0.7, "team_xi07"), (0.9, "team_xi09")):
-        vals = [v[("c", t, xi)] for t in M2_TIERS.values()]
-        out[("c", f"{key}_min")] = min(vals)
-        out[("c", f"{key}_max")] = max(vals)
-
-    root = _root(data_root)
-    d = pd.read_csv(root / "tables" / "m2_xi_bug0006_delta.csv")
-    q = d[(d["arm"] == "M2_xi") & (d["scope"] == "all")
-          & (d["metric"] == "c_ideal_tm")]
-    if len(q) != 1:
-        raise AssertionError("m2_xi_bug0006_delta: c_ideal_tm/all row")
-    out[("b", "bug0006_m2_c_tm_delta")] = float(q["mean_delta"].iloc[0])
-    dw = pd.read_csv(root / "tables" / "w_v05_bug0006_delta.csv")
-    out[("a", "bug0006_w_v05_harvest_max_abs_diff")] = float(
-        dw[dw["metric"] == "harvested_fin"]["max_abs_diff"].abs().max())
-
-    def _w(scope, metric, col):
-        q = dw[(dw["scope"] == scope) & (dw["metric"] == metric)]
-        if len(q) != 1:
-            raise AssertionError(f"w_v05 delta row {scope}/{metric}")
-        return float(q[col].iloc[0])
-
-    out[("b", "bug0006_w_v05_m0_c_tm_max_abs_diff")] = _w(
-        "g=0.0 (control)", "c_ideal_tm", "max_abs_diff")
-    out[("b", "bug0006_w_v05_m1_mgstd5_c_tm_mean_delta")] = _w(
-        "g=0.1 (mgstd5)", "c_ideal_tm", "mean_delta")
-    out[("b", "bug0006_w_v05_m1_mgstd5_c_tm_max_abs_diff")] = _w(
-        "g=0.1 (mgstd5)", "c_ideal_tm", "max_abs_diff")
-    return out
-
-
-def _vertical_rules(ax) -> list:
-    out = []
-    for ln in ax.lines:
-        try:
-            x = np.asarray(ln.get_xdata(orig=False), dtype=float)
-            y = np.asarray(ln.get_ydata(orig=False), dtype=float)
-        except (TypeError, ValueError):
-            continue
-        if len(x) == 2 and len(y) == 2 and np.ptp(x) == 0.0 and np.ptp(y) > 0.0:
-            out.append(ln)
-    return out
-
-
-def _recheck_canvas(data_root, tol):
-    fails: list[str] = []
-    spec = importlib.util.spec_from_file_location(
-        "figF_v2_m2_visibility_postbug",
-        HERE / "figF_v2_m2_visibility_postbug.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    fig, sidecar, _runs, _pins = mod.build_figure(data_root)
-    try:
-        axes = fig.axes
-        if len(axes) != 3:
-            return [f"figure has {len(axes)} axes, expected 3"]
-        # regression guards for the two pre-fix defects in panel B refit
-        for i, ax in enumerate(axes):
-            bad = [t.get_text() for t in ax.texts
-                   if t.get_text().strip() in {"0", "0.0"}]
-            if bad:
-                fails.append(f"panel {i}: stray zero text label(s) {bad}")
-            vr = _vertical_rules(ax)
-            if vr:
-                fails.append(f"panel {i}: {len(vr)} vertical boundary rule(s) "
-                             "still drawn")
-        visual_qa.assert_figure_clean(fig, [
-            {"ax": axes[0], "metric": M_HARVEST, "expect_lines": len(TIERS),
-             "points_per_line": len(XIS), "sidecar": sidecar,
-             "filters": {"statistic": "mean"}, "tol": tol},
-            {"ax": axes[1], "metric": M_CORR, "expect_lines": len(TIERS),
-             "points_per_line": len(XIS), "sidecar": sidecar,
-             "filters": {"statistic": "mean"}, "tol": tol},
-            {"ax": axes[2], "metric": M_TEAM, "expect_lines": len(M2_TIERS),
-             "points_per_line": len(XIS), "sidecar": sidecar,
-             "filters": {"statistic": "mean"}, "tol": tol},
-        ])
-    except AssertionError as exc:
-        fails.append(f"visual_qa: {exc}")
-    finally:
-        import matplotlib.pyplot as plt
-        plt.close(fig)
-    return fails
+        ann("b", f"c_tm_first::{tier}", V[("b", tier, pins["xs"][0])])
+        ann("b", f"c_tm_last::{tier}", V[("b", tier, pins["xs"][-1])])
+    small = [v for (p, t, x), v in V.items() if p == "c" and x <= 0.5]
+    ann("c", "team_small_min", min(small))
+    ann("c", "team_small_max", max(small))
+    for lab, thr in (("xi07", 0.7), ("xi09", 0.9)):
+        vals = [v for (p, t, x), v in V.items() if p == "c" and x == thr]
+        ann("c", f"team_{lab}_min", min(vals))
+        ann("c", f"team_{lab}_max", max(vals))
+    return pd.DataFrame(rows)
 
 
 def check(outdir="output/report_notebook_v1", data_root=None,
           tol: float = 1e-9) -> list[str]:
+    fails: list[str] = []
+    runs, pins = load(data_root)
+
+    if pins["files"] != 55:
+        fails.append(f"{pins['files']} cell files, expected 55")
+    if pins["runs"] != 1100:
+        fails.append(f"{pins['runs']} runs, expected 1,100")
+    if pins["cells"] != 55:
+        fails.append(f"{pins['cells']} (tier, xi) cells, expected 55")
+    if len(pins["xs"]) != 11:
+        fails.append(f"{len(pins['xs'])} xi points, expected 11")
+    if pins["landscapes"] != [LANDSCAPE]:
+        fails.append(f"landscape grid {pins['landscapes']}")
+    if set(runs["tier_label"].unique()) != set(TIERS):
+        fails.append(f"tier set {sorted(runs['tier_label'].unique())}")
+
+    # the population asymmetry that justifies excluding the staggered tier
+    pop = runs.groupby("tier_label")["n_final"].mean()
+    if abs(pop[T1S] - pop[T0]) <= 1.5 * pop[T0] * 0.5:
+        fails.append("staggered M1 tier is no longer a different population: "
+                     f"N={pop[T1S]:.0f} vs {pop[T0]:.0f}")
+
+    exp = expected(runs, pins)
     out = Path(outdir)
     if not out.is_absolute():
         out = REPO / out
-    exp, fails = _load_cells(data_root)
-    if fails:
-        return fails
-
     side_path = out / f"{FNAME}_data.csv"
-    for p in (side_path, out / f"{FNAME}.png", out / f"{FNAME}.pdf"):
-        if not p.exists():
-            fails.append(f"missing output {p}")
-    if fails:
-        return fails
+    if not side_path.exists():
+        return fails + [f"missing sidecar {side_path}"]
+    side = pd.read_csv(side_path)
+    if len(side) != len(exp):
+        fails.append(f"sidecar rows {len(side)} != expected {len(exp)}")
 
-    got = pd.read_csv(side_path)
-    need = {"panel", "metric", "statistic", "tier", "xi", "value",
-            "ci_lo", "ci_hi", "n"}
-    if not need <= set(got.columns):
-        fails.append(f"sidecar missing columns {sorted(need - set(got.columns))}")
-        return fails
+    key = ["panel", "metric", "statistic", "tier"]
+    e, s = exp.copy(), side.copy()
+    e["xi"] = pd.to_numeric(e["xi"], errors="coerce").round(6)
+    s["xi"] = pd.to_numeric(s["xi"], errors="coerce").round(6)
+    for d in (e, s):
+        d["xi"] = d["xi"].fillna(-999.0)
+        d["tier"] = d["tier"].fillna("").astype(str)
+    m = s.merge(e, on=key + ["xi"], how="outer", suffixes=("_side", "_exp"),
+                indicator=True)
+    for _, r in m[m["_merge"] != "both"].iterrows():
+        fails.append(f"sidecar/expected key mismatch: "
+                     f"{[r[k] for k in key + ['xi']]} ({r['_merge']})")
+    both = m[m["_merge"] == "both"]
+    for col in ("value", "ci_lo", "ci_hi"):
+        a = both[f"{col}_side"].astype(float).to_numpy()
+        b = both[f"{col}_exp"].astype(float).to_numpy()
+        ok = (np.isnan(a) & np.isnan(b)) | (np.abs(a - b) <= tol)
+        for i in np.where(~ok)[0][:5]:
+            r = both.iloc[i]
+            fails.append(f"{col} drift at {[r[k] for k in key + ['xi']]}: "
+                         f"{a[i]!r} vs {b[i]!r}")
 
-    means = got[got["statistic"] == "mean"]
-    seen = set()
-    for _, r in means.iterrows():
-        key = (r["panel"], r["tier"], float(r["xi"]))
-        if key in seen:
-            fails.append(f"duplicate sidecar cell {key}")
-            continue
-        seen.add(key)
-        if r["metric"] != PANELS[r["panel"]]:
-            fails.append(f"{key}: metric {r['metric']!r} does not belong to "
-                         f"panel {r['panel']!r}")
-        if key not in exp:
-            fails.append(f"unexpected sidecar cell {key}")
-            continue
-        mean, lo, hi, n = exp[key]
-        for name, a, b in (("value", r["value"], mean), ("ci_lo", r["ci_lo"], lo),
-                           ("ci_hi", r["ci_hi"], hi)):
-            if abs(float(a) - float(b)) > tol:
-                fails.append(f"{key} {name}: sidecar {float(a)!r} vs "
-                             f"recomputed {float(b)!r}")
-        if int(r["n"]) != n:
-            fails.append(f"{key} n: sidecar {int(r['n'])} vs {n}")
-    for key in exp:
-        if key not in seen:
-            fails.append(f"missing sidecar cell {key}")
+    # panel (c) must not carry the staggered tier
+    pc = side[(side["panel"] == "c") & (side["statistic"] == "mean")]
+    if T1S in set(pc["tier"]):
+        fails.append("panel (c) plots the staggered M1 tier, whose population "
+                     "is not comparable")
 
-    # Klann benchmark reference row (panel c)
-    ref = got[(got["statistic"] == "reference") & (got["metric"] == M_TEAM)]
-    if len(ref) != 1:
-        fails.append(f"sidecar: {len(ref)} Klann reference rows, expected 1")
-    elif abs(float(ref["value"].iloc[0]) - KLANN_TEAM_SIZE) > tol:
-        fails.append(f"Klann reference row {float(ref['value'].iloc[0])!r} != "
-                     f"{KLANN_TEAM_SIZE}")
-
-    anns = got[got["statistic"] == "annotation"]
-    have = {(r["panel"], r["metric"]): float(r["value"]) for _, r in anns.iterrows()}
-    want = _expected_annotations(exp, data_root)
-    for key, val in want.items():
-        if key not in have:
-            fails.append(f"missing annotation {key}")
-        elif abs(have[key] - val) > tol:
-            fails.append(f"annotation {key}: sidecar {have[key]!r} vs "
-                         f"recomputed {val!r}")
-    for key in have:
-        if key not in want:
-            fails.append(f"unexpected annotation {key}")
-
-    fails.extend(_recheck_canvas(data_root, tol))
+    # ---- rendering regressions + rebuild --------------------------------
+    # ``build_figure`` runs ``visual_qa.assert_figure_clean`` and the local
+    # display-space audit itself, so a render-time regression raises here.
+    import matplotlib.pyplot as plt
+    import figF_v2_m2_visibility_postbug as B
+    fig, _side, _runs, _pins = B.build_figure(data_root)
+    texts = [t.get_text() for t in fig.texts]
+    for ax in fig.axes:
+        texts += [t.get_text() for t in ax.texts]
+        for line in ax.get_lines():
+            x = line.get_xdata(orig=False)
+            if len(x) == 2 and np.ptp(np.asarray(x, float)) == 0.0:
+                fails.append("vertical band rule still drawn in "
+                             f"{ax.get_title()[:24]!r}")
+    plt.close(fig)
+    if any(t.strip() == "0" for t in texts):
+        fails.append('a text artist still reads as a bare "0"')
     return fails
 
 
 if __name__ == "__main__":
     problems = check()
-    print("PASS" if not problems else "FAIL")
-    for p in problems:
-        print(" -", p)
-    sys.exit(1 if problems else 0)
+    if problems:
+        print(f"FAIL ({len(problems)}):")
+        for p in problems:
+            print("  -", p)
+        raise SystemExit(1)
+    print("verify_F10b_v2: OK — every plotted value, CI and annotation "
+          "reconciles; visual_qa clean on rebuild")
