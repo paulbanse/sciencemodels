@@ -11,22 +11,31 @@ Design (contract-first; this block is the run specification):
 
     xi = 1 - c in {0.0, 0.1, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0}   (9 levels)
     w  in {0.0, 0.25, 0.5, 0.75, 1.0}                             (5 levels)
-    tiers {M0, M1}  ->  90 cells x 20 seeds = 1,800 runs
+    tiers {M0, M1}  ->  90 cells x 20 seeds = 1,800 runs PER LANDSCAPE
 
     ADR-0003 clock: gamma = vanishing_factor_for_prestige = 0.5**(1/10)
     (~0.933, 5-year half-life), H = step_limit = 200 steps (100 academic
-    years), N = n_agents = 20, grid 20x20, landscape mgstd5
-    (multipleGaussians, std = 5, number_gaussians = 2), g = 0.25 for M1,
-    tau_max = 80.  Seeds: agent_seed 0..19, which drives agent AND landscape
-    RNG jointly (the house seed semantics).
+    years), N = n_agents = 20, grid 20x20, g = 0.25 for M1, tau_max = 80.
+    Seeds: agent_seed 0..19, which drives agent AND landscape RNG jointly
+    (the house seed semantics).
+
+Landscapes (``--landscape``, F3b landscape check):
+
+    mgstd5   multipleGaussians {std: 5, number_gaussians: 2}  ("MultG2")
+    mg6      multipleGaussians {std: 5, number_gaussians: 6}  ("MultG6")
+    noisypr5 noisyGaussian {prop_random: 5, std: 5, std_curiosity: 0.1}
+             ("Noisy2"; the modern noisypr5 bundle, std_curiosity 0.1)
+
+Outputs per landscape under data/attraction_heatmap[_TAG]_adr0003/ (the
+mgstd5 round keeps its untagged directory for checkpoint continuity).
 
 Headline metrics per run (self-describing full report row is written):
     percentage_knowledge_harvested        (Panel A)
     Mean_of_Corr_prestige_ideal_merit     = time-mean Corr(P_out, M*) (Panel B)
 
 Checkpointing (ADR-0001): one CSV per completed cell
-(``data/attraction_heatmap_adr0003/cells/cell_xi{tag}_w{tag}_{tier}.csv``);
-completed cells are skipped on restart and a timeout loses at most one cell.
+(``cells/cell_xi{tag}_w{tag}_{tier}.csv``); completed cells are skipped on
+restart and a timeout loses at most one cell.
 In-run canaries: (i) a two-run determinism probe, (ii) a drift probe that
 re-runs seed 0 of the anchor cell and diffs it against the stored checkpoint
 row exactly (terminates loudly instead of writing bad outputs), (iii) the
@@ -37,10 +46,12 @@ NOT CALIBRATED: model-internal only (owner ruling 2026-11-13). The ADR-0003
 values are conceptual scale anchors, not empirical fits.
 
 Run:
-    /opt/hermes/.venv/bin/python scripts/attraction_heatmap/run_attraction_heatmap.py
+    /opt/hermes/.venv/bin/python scripts/attraction_heatmap/run_attraction_heatmap.py \
+        --landscape {mgstd5,mg6,noisypr5}
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -54,22 +65,37 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
 
 from sciencemodels import MyModel  # noqa: E402
-from sciencemodels.landscapes import multipleGaussians  # noqa: E402
+from sciencemodels.landscapes import multipleGaussians, noisyGaussian  # noqa: E402
 from sciencemodels.model import (  # noqa: E402
     CANONICAL_AGENT_GENERATION_TIME,
     CANONICAL_TAU_MAX,
     CANONICAL_VANISHING_FACTOR,
 )
 
-OUT_DIR = os.path.join("data", "attraction_heatmap_adr0003")
-CELL_DIR = os.path.join(OUT_DIR, "cells")
-MANIFEST = os.path.join(OUT_DIR, "manifest.json")
-
 XI_LEVELS = (0.0, 0.1, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 W_LEVELS = (0.0, 0.25, 0.5, 0.75, 1.0)
 SEEDS = tuple(range(20))
 STEP_LIMIT = 200  # H = 200 steps = 100 academic years (ADR-0003)
 N_JOBS = 3        # declared deliberately (ADR-0001 process hygiene)
+
+#: house landscape bundles (mgstd5 = MultG2, mg6 = MultG6, noisypr5 = Noisy2)
+LANDSCAPES = {
+    "mgstd5": {
+        "cell_init_function": multipleGaussians,
+        "generation_params": {"std": 5, "number_gaussians": 2},
+    },
+    "mg6": {
+        "cell_init_function": multipleGaussians,
+        "generation_params": {"std": 5, "number_gaussians": 6},
+    },
+    "noisypr5": {
+        "cell_init_function": noisyGaussian,
+        "generation_params": {
+            "prop_random": 5, "std": 5, "std_curiosity": 0.1,
+        },
+    },
+}
+DISPLAY_NAME = {"mgstd5": "mgstd5", "mg6": "MultG6", "noisypr5": "Noisy2"}
 
 TIERS = {
     "m0": {"agent_generation_time": 0.0, "exit_mode": "none"},
@@ -85,9 +111,6 @@ BASE_PARAMS = {
     "epsilon": 0.1,
     "harvest": 0.02,
     "grid_size": 20,
-    "cell_init_function": multipleGaussians,
-    # mgstd5 bundle; the model injects agent_seed as generation_params["seed"]
-    "generation_params": {"std": 5, "number_gaussians": 2},
     "use_distance": True,
     "new_questions": 0,
     "agent_generation_function": lambda cur, _rng, _params: cur,
@@ -108,13 +131,21 @@ def _w_tag(w: float) -> str:
     return f"{int(round(w * 100)):03d}"
 
 
-def cell_path(tier: str, xi: float, w: float) -> str:
+def out_dir(landscape: str) -> str:
+    """Output root per landscape; mgstd5 keeps the F3 directory name."""
+    tag = "" if landscape == "mgstd5" else f"_{landscape}"
+    return os.path.join("data", f"attraction_heatmap{tag}_adr0003")
+
+
+def cell_path(tier: str, xi: float, w: float, landscape: str) -> str:
     return os.path.join(
-        CELL_DIR, f"cell_xi{_xi_tag(xi)}_w{_w_tag(w)}_{tier}.csv"
+        out_dir(landscape), "cells",
+        f"cell_xi{_xi_tag(xi)}_w{_w_tag(w)}_{tier}.csv"
     )
 
 
 def run_one(tier: str, xi: float, w: float, seed: int,
+            landscape: str = "mgstd5",
             step_limit: int = STEP_LIMIT) -> dict:
     """One seeded run -> one self-describing report row (+ sweep tags)."""
     params = dict(
@@ -123,19 +154,22 @@ def run_one(tier: str, xi: float, w: float, seed: int,
         agent_seed=seed,
         step_limit=step_limit,
         prestige_weight_in_visibility=w,
+        # landscape bundle; the model injects agent_seed as the landscape seed
+        **LANDSCAPES[landscape],
         **TIERS[tier],
     )
     model = MyModel(**params)
     row = model.run_mode_for_bulk()
     return {
         "tier": tier, "xi": float(xi), "w": float(w),
-        "curiosity": float(1.0 - xi),
+        "curiosity": float(1.0 - xi), "landscape": landscape,
         **row,
     }
 
 
-def run_cell(tier: str, xi: float, w: float) -> pd.DataFrame:
-    rows = [run_one(tier, xi, w, seed) for seed in SEEDS]
+def run_cell(tier: str, xi: float, w: float,
+             landscape: str = "mgstd5") -> pd.DataFrame:
+    rows = [run_one(tier, xi, w, seed, landscape) for seed in SEEDS]
     df = pd.DataFrame(rows)
     assert len(df) == len(SEEDS), f"cell {tier}/xi{xi}/w{w}: {len(df)} rows"
     return df
@@ -174,13 +208,13 @@ def _sig_equal(a, b) -> bool:
     return fa == fb
 
 
-def canaries() -> dict:
+def canaries(landscape: str) -> dict:
     """In-run self-checks before any new variants are produced."""
     out = {}
 
     # (i) determinism: the same seeded run twice must be bit-identical
-    r1 = run_one("m0", 0.0, 0.0, 0, step_limit=30)
-    r2 = run_one("m0", 0.0, 0.0, 0, step_limit=30)
+    r1 = run_one("m0", 0.0, 0.0, 0, landscape, step_limit=30)
+    r2 = run_one("m0", 0.0, 0.0, 0, landscape, step_limit=30)
     diffs = [k for k in r1 if not _sig_equal(r1[k], r2[k])]
     assert not diffs, f"determinism canary FAILED, differing keys: {diffs}"
     out["determinism"] = "OK"
@@ -189,12 +223,13 @@ def canaries() -> dict:
     #      stored checkpoint row exactly (loud failure instead of bad outputs).
     #      _sig_equal is the comparison signature: the stored row round-trips
     #      through CSV, where dtypes differ from the in-memory ones (int vs
-    #      float64) while the values are identical.
-    anchor = cell_path("m0", 0.0, 0.0)
+    #      float64) while the values are identical. Keys absent from older
+    #      checkpoints (e.g. the landscape tag) are skipped.
+    anchor = cell_path("m0", 0.0, 0.0, landscape)
     if cell_is_complete(anchor):
         stored = pd.read_csv(anchor)
         ref = stored[stored["agent_seed"] == 0].iloc[0]
-        now = run_one("m0", 0.0, 0.0, 0)
+        now = run_one("m0", 0.0, 0.0, 0, landscape)
         drift = [
             k for k in now
             if k in ref.index and not _sig_equal(now[k], ref[k])
@@ -211,7 +246,7 @@ def canaries() -> dict:
     def _mini(**kw):
         m = MyModel(**dict(
             BASE_PARAMS, initial_curiosity=np.float64(0.5), agent_seed=7,
-            step_limit=30, **kw))
+            step_limit=30, **LANDSCAPES[landscape], **kw))
         return m.run_mode_for_bulk(), m
 
     r_flag_off, m_flag_off = _mini(use_visibility_reward=False)
@@ -231,30 +266,34 @@ def canaries() -> dict:
     return out
 
 
-def main() -> None:
-    os.makedirs(CELL_DIR, exist_ok=True)
+def main(landscape: str = "mgstd5") -> None:
+    assert landscape in LANDSCAPES, f"unknown landscape {landscape!r}"
+    cell_dir = os.path.join(out_dir(landscape), "cells")
+    manifest_path = os.path.join(out_dir(landscape), "manifest.json")
+    os.makedirs(cell_dir, exist_ok=True)
     t0 = time.time()
-    canary_report = canaries()
-    print("canaries:", canary_report)
+    canary_report = canaries(landscape)
+    print(f"canaries ({landscape}):", canary_report)
 
     jobs = []
     for tier in TIERS:
         for xi in XI_LEVELS:
             for w in W_LEVELS:
-                path = cell_path(tier, xi, w)
+                path = cell_path(tier, xi, w, landscape)
                 if cell_is_complete(path):
                     continue
                 jobs.append((tier, xi, w, path))
     gross = len(TIERS) * len(XI_LEVELS) * len(W_LEVELS)
     print(
-        f"grid: {gross} cells x {len(SEEDS)} seeds = {gross * len(SEEDS)} runs; "
-        f"{gross - len(jobs)} cells already checkpointed, {len(jobs)} to run"
+        f"grid ({landscape}): {gross} cells x {len(SEEDS)} seeds = "
+        f"{gross * len(SEEDS)} runs; {gross - len(jobs)} cells already "
+        f"checkpointed, {len(jobs)} to run"
     )
 
     done = 0
     with ProcessPoolExecutor(max_workers=N_JOBS) as pool:
         futs = {
-            pool.submit(run_cell, tier, xi, w): (tier, xi, w, path)
+            pool.submit(run_cell, tier, xi, w, landscape): (tier, xi, w, path)
             for tier, xi, w, path in jobs
         }
         for fut in as_completed(futs):
@@ -268,45 +307,58 @@ def main() -> None:
 
     ran = sum(
         1 for tier in TIERS for xi in XI_LEVELS for w in W_LEVELS
-        if cell_is_complete(cell_path(tier, xi, w))
+        if cell_is_complete(cell_path(tier, xi, w, landscape))
     )
-    manifest = {
-        "schema": "attraction_heatmap_adr0003_v1",
-        "task_id": "attraction-trias-heatmap",
-        "git_head": os.popen("git rev-parse HEAD").read().strip(),
-        "python": sys.version.split()[0],
-        "numpy": np.__version__,
-        "pandas": pd.__version__,
-        "design": {
-            "xi_levels": list(XI_LEVELS),
-            "w_levels": list(W_LEVELS),
-            "tiers": TIERS,
-            "seeds": list(SEEDS),
-            "step_limit": STEP_LIMIT,
-            "grid_size": 20,
-            "n_agents": 20,
-            "landscape": "mgstd5 (multipleGaussians std=5, number_gaussians=2)",
-            "vanishing_factor_for_prestige": float(CANONICAL_VANISHING_FACTOR),
-            "tau_max": CANONICAL_TAU_MAX,
-            "metrics": {
-                "panel_a": "percentage_knowledge_harvested",
-                "panel_b": ("Mean_of_Corr_prestige_ideal_merit"
-                            " (= time-mean Corr(P_out, M*))"),
+    if not jobs and os.path.exists(manifest_path):
+        # idempotent re-run over a complete archive: keep the recorded
+        # manifest (and with it the writing round's provenance) untouched
+        print(f"grid complete, manifest untouched -> {manifest_path}")
+    else:
+        manifest = {
+            "schema": "attraction_heatmap_adr0003_v2",
+            "task_id": "attraction-trias-landscapes",
+            "git_head": os.popen("git rev-parse HEAD").read().strip(),
+            "python": sys.version.split()[0],
+            "numpy": np.__version__,
+            "pandas": pd.__version__,
+            "design": {
+                "xi_levels": list(XI_LEVELS),
+                "w_levels": list(W_LEVELS),
+                "tiers": TIERS,
+                "seeds": list(SEEDS),
+                "step_limit": STEP_LIMIT,
+                "grid_size": 20,
+                "n_agents": 20,
+                "landscape": landscape,
+                "landscape_display": DISPLAY_NAME[landscape],
+                "landscape_bundle": repr(LANDSCAPES[landscape]),
+                "vanishing_factor_for_prestige":
+                    float(CANONICAL_VANISHING_FACTOR),
+                "tau_max": CANONICAL_TAU_MAX,
+                "metrics": {
+                    "panel_a": "percentage_knowledge_harvested",
+                    "panel_b": ("Mean_of_Corr_prestige_ideal_merit"
+                                " (= time-mean Corr(P_out, M*))"),
+                },
             },
-        },
-        "canaries": canary_report,
-        "gross_cells": gross,
-        "net_cells_complete": ran,
-        "gross_runs": gross * len(SEEDS),
-        "net_runs": ran * len(SEEDS),
-        "n_jobs": N_JOBS,
-        "wall_s": round(time.time() - t0, 1),
-    }
-    with open(MANIFEST, "w") as fh:
-        json.dump(manifest, fh, indent=1)
-    print(f"net cells complete: {ran}/{gross}; manifest -> {MANIFEST}")
+            "canaries": canary_report,
+            "gross_cells": gross,
+            "net_cells_complete": ran,
+            "gross_runs": gross * len(SEEDS),
+            "net_runs": ran * len(SEEDS),
+            "n_jobs": N_JOBS,
+            "wall_s": round(time.time() - t0, 1),
+        }
+        with open(manifest_path, "w") as fh:
+            json.dump(manifest, fh, indent=1)
+        print(f"net cells complete: {ran}/{gross}; manifest -> {manifest_path}")
     assert ran == gross, f"grid incomplete: {ran}/{gross} cells"
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--landscape", choices=sorted(LANDSCAPES),
+                    default="mgstd5",
+                    help="landscape bundle to sweep (default: mgstd5)")
+    args = ap.parse_args()
+    main(args.landscape)

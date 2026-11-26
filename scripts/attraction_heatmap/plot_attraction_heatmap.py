@@ -29,10 +29,12 @@ NOT CALIBRATED: model-internal only (owner ruling 2026-11-13).
 
 Run:
     MPLBACKEND=Agg /opt/hermes/.venv/bin/python \
-        scripts/attraction_heatmap/plot_attraction_heatmap.py
+        scripts/attraction_heatmap/plot_attraction_heatmap.py \
+        --landscape {mgstd5,mg6,noisypr5}
 """
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 import textwrap
@@ -49,9 +51,19 @@ sys.path.insert(0, os.path.join(REPO, "scripts", "report_notebook"))
 import diagram_templates as T  # noqa: E402
 import visual_qa  # noqa: E402
 
-CELL_DIR = os.path.join(REPO, "data", "attraction_heatmap_adr0003", "cells")
-OUT = os.path.join(REPO, "output", "report_notebook_v1",
-                   "F_attraction_trias_heatmap.png")
+CELL_DIRS = {
+    "mgstd5": os.path.join(REPO, "data", "attraction_heatmap_adr0003", "cells"),
+    "mg6": os.path.join(REPO, "data", "attraction_heatmap_mg6_adr0003",
+                        "cells"),
+    "noisypr5": os.path.join(REPO, "data",
+                             "attraction_heatmap_noisypr5_adr0003", "cells"),
+}
+DISPLAY_NAME = {"mgstd5": "mgstd5", "mg6": "MultG6", "noisypr5": "Noisy2"}
+OUT_NAMES = {
+    "mgstd5": "F_attraction_trias_heatmap.png",
+    "mg6": "F_attraction_trias_heatmap_mg6.png",
+    "noisypr5": "F_attraction_trias_heatmap_noisypr5.png",
+}
 
 XI_LEVELS = (0.0, 0.1, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)
 W_LEVELS = (0.0, 0.25, 0.5, 0.75, 1.0)
@@ -69,8 +81,9 @@ METRICS = (
 VERTICAL_TOL_DEG = 10.0
 
 
-def load_grid() -> dict:
+def load_grid(landscape: str) -> dict:
     """tier -> metric -> 5x9 matrix of 20-seed cell means (+ coverage checks)."""
+    cell_dir = CELL_DIRS[landscape]
     out = {(t, m): np.full((len(W_LEVELS), len(XI_LEVELS)), np.nan)
            for t in TIERS for m, _ in METRICS}
     n_ok = 0
@@ -79,7 +92,7 @@ def load_grid() -> dict:
             for w_i, w in enumerate(W_LEVELS):
                 tag = (f"cell_xi{int(round(xi * 100)):03d}"
                        f"_w{int(round(w * 100)):03d}_{tier}.csv")
-                path = os.path.join(CELL_DIR, tag)
+                path = os.path.join(cell_dir, tag)
                 assert os.path.exists(path), f"missing checkpoint: {path}"
                 df = pd.read_csv(path)
                 assert len(df) == 20, f"{tag}: {len(df)} runs, expected 20"
@@ -108,8 +121,10 @@ def tilt_stats(z: np.ndarray) -> dict:
             "vertical": theta <= VERTICAL_TOL_DEG}
 
 
-def build() -> dict:
-    grids = load_grid()
+def build(landscape: str = "mgstd5") -> dict:
+    out = os.path.join(REPO, "output", "report_notebook_v1",
+                       OUT_NAMES[landscape])
+    grids = load_grid(landscape)
     s = {**T.HOUSE_STYLE, "dpi": 180, "title_size": 11, "label_size": 9.5,
          "tick_size": 8.5, "note_size": 7.5}
     fig, axes = plt.subplots(2, 2, figsize=(10.4, 7.6))
@@ -153,15 +168,21 @@ def build() -> dict:
             ax.tick_params(labelsize=s["tick_size"])
             fig.colorbar(im, ax=ax, shrink=0.86, pad=0.02)
 
+    n_vert = sum(1 for st in stats.values() if st["vertical"])
+    if n_vert == 4:
+        summary = "iso-lines vertical in 4/4 panels (proximity-dominated)"
+    else:
+        summary = (f"iso-lines tilted in {4 - n_vert}/4 panels "
+                   "(past-prestige modulation)")
     fig.suptitle(
-        "Attraction trias on the ADR-0003 clock: the $\\xi$ axis dominates, "
-        "past-prestige weighting $w$ tilts but does not replace it",
+        f"Attraction trias on the ADR-0003 clock \u2014 landscape "
+        f"{DISPLAY_NAME[landscape]}: {summary}",
         fontsize=s["title_size"] + 1, y=0.985)
 
-    n_vert = sum(1 for st in stats.values() if st["vertical"])
     note = (
-        "source: data/attraction_heatmap_adr0003/ (90 cells x 20 seeds, "
-        "H = 200, N = 20, mgstd5, gamma = 0.933; M1: g = 0.25, fixed_span, "
+        f"source: {os.path.relpath(CELL_DIRS[landscape], REPO)}/ "
+        f"(landscape {landscape} = {DISPLAY_NAME[landscape]}; 90 cells x 20 "
+        "seeds, H = 200, N = 20, gamma = 0.933; M1: g = 0.25, fixed_span, "
         "tau_max = 80). Cell means over 20 seeds; contours at 6 levels. "
         "Iso-line angle from vertical = atan2(|b|, |a|) of the OLS plane "
         "Z = a*xi_t + b*w_t + c on normalized axes; 0 deg = vertical "
@@ -183,7 +204,7 @@ def build() -> dict:
             for w_i, w in enumerate(W_LEVELS):
                 for xi_i, xi in enumerate(XI_LEVELS):
                     rows.append({"metric": metric, "tier": tier,
-                                 "xi": xi, "w": w,
+                                 "landscape": landscape, "xi": xi, "w": w,
                                  "value": float(z[w_i, xi_i]), "n": 20,
                                  "theta_deg": stats[(tier, metric)]["theta_deg"]})
     sidecar = pd.DataFrame(rows)
@@ -194,24 +215,30 @@ def build() -> dict:
               ((0, axes[0][col]), (1, axes[1][col]))]
     report = visual_qa.assert_figure_clean(fig, panels)
 
-    outdir = os.path.dirname(OUT)
+    outdir = os.path.dirname(out)
     os.makedirs(outdir, exist_ok=True)
-    fig.savefig(OUT, dpi=s["dpi"])
-    pdf = OUT[:-4] + ".pdf"
+    fig.savefig(out, dpi=s["dpi"])
+    pdf = out[:-4] + ".pdf"
     fig.savefig(pdf)
     plt.close(fig)
-    csv = T.write_figure_data(sidecar, OUT)
+    csv = T.write_figure_data(sidecar, out)
 
     print(f"QA: {report.get('_total', 0)} failure(s)")
     if report.get("_relieved"):
         print("relieved:", report["_relieved"])
-    print(f"Wrote {OUT} / {pdf} / {csv}")
+    print(f"Wrote {out} / {pdf} / {csv}")
     for (tier, metric), st in sorted(stats.items()):
         print(f"  {tier} {metric}: theta={st['theta_deg']:.2f} deg, "
               f"a={st['a']:+.4f}, b={st['b']:+.4f}, "
               f"{'vertical' if st['vertical'] else 'tilted'}")
-    return {"png": OUT, "pdf": pdf, "data_csv": csv, "stats": stats}
+    return {"png": out, "pdf": pdf, "data_csv": csv, "stats": stats,
+            "landscape": landscape}
 
 
 if __name__ == "__main__":
-    build()
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--landscape", choices=sorted(CELL_DIRS),
+                    default="mgstd5",
+                    help="landscape to plot (default: mgstd5)")
+    args = ap.parse_args()
+    build(args.landscape)
