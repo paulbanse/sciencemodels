@@ -4,10 +4,10 @@ author: "Antigravity"
 date: "2026-11-15"
 tags: [idea, metrics, time-windows, discovery-phase, depletion-phase, turnover-v1]
 project: "sciencemodels"
-status: idea
+status: embraced
 ---
 
-- **Status:** idea
+- **Status:** embraced (2026-11-27, owner ruling: implemented as Discovery $t \le 80$ / Depletion $t \ge 150$ / `c_ideal_late` reporters in `turnover_v2` and `adr0003_remeasure_v1`)
 - **Date:** 2026-11-15
 - **Related:** `output/reports/turnover_v1.md` (Lines 138–171, 282–287), `AdmiralsLog/contributions/CONT5-generational-turnover-and-paradigm-lockin.md`, `AdmiralsLog/proposals/P-0009-core-turnover-and-steady-state-interventions.md`
 

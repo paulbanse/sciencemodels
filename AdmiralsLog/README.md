@@ -17,4 +17,4 @@ and its register, what happened (`logs/`), and what is retired
 
 ## Register counters
 
-Next ids: ADR-0004, BUG-0007, CONT8, DE-0001, IE-0009, UE-0004, P-0012.
+Next ids: ADR-0005, BUG-0007, CONT8, DE-0001, IE-0009, UE-0004, P-0012.

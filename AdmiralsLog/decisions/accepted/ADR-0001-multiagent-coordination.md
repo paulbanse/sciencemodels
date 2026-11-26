@@ -87,6 +87,22 @@ Standing clauses testable against any file or session action:
   worker names its input/output file boundaries and inherits this ADR; the
   dispatching session verifies the work against the definition of done and
   commits it by pathspec.
+- **Parallel-helper isolation (amended 2026-11-26, owner ruling).** Whenever
+  two or more helpers run concurrently, each helper operates in a
+  **task-specific git worktree** (`git worktree add ../wt-<task-id> -b
+  task/<task-id> jokoexplore`) rather than sharing the main working tree:
+  - *Shared `data/` symlink:* because `data/` is gitignored and large, each
+    worktree symlinks `data/` to the main repository's `data/` (read-only for
+    existing archives; outputs written strictly to a unique `data/<task_id>/`
+    directory).
+  - *Log inbox handoff:* parallel helpers do not append directly to
+    `AdmiralsLog/logs/<YYYY-MM>.md`; instead they write a single-file entry to
+    `AdmiralsLog/logs/inbox/<task_id>.md`, and the coordinator folds inbox
+    entries sequentially into `<YYYY-MM>.md` when merging worktrees (preventing
+    duplicate entry numbers and tail-merge conflicts).
+  - *Single-task lock:* each workplan item carries one unique `task_id` and is
+    dispatched to at most one active worktree at a time (preventing duplicate
+    deliverable collisions).
 - **Foreign agents and frozen zones.** A foreign agent is greeted by
   `AGENTS.md`, which hands it to `IDEA.md`; collaborators' material lands in
   `AdmiralsLog/contributions/`, named by source and date. The frozen zone

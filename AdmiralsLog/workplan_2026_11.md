@@ -2,13 +2,14 @@
 title: "Workplan: Post-Review Consolidation, Paper v3.3, and Next Exploration Branches"
 author: "Jakob Kapeller & Antigravity"
 date: "2026-11-26"
-version: 1.1
+version: 1.2
 revision-vehicle: strikethrough
 revision-renders: "md, pdf, html"
-tags: [workplan, paper-v3.3, adr-0003, review, proxy-failure, sciencemodels]
+tags: [workplan, paper-v3.5, adr-0003, review, proxy-failure, sciencemodels]
 project: "sciencemodels"
 ---
 
+**Version 1.2** (27 November 2026)
 **Version 1.1** (26 November 2026)
 **Version 1.0** (26 November 2026)
 
@@ -57,44 +58,32 @@ proposals (`P-0001`, `P-0007`--`P-0011`) into one ordered register.
 6. ~~**Audit and resolve §3.2 / Figure 3 (`use_distance = 0` "jump search" bug)**~~ *(Done by H2 in v3.3: §3.2 / old Figure 3 removed, figures renumbered 1--16.)*
 7. ~~**Disambiguate `vanishing_factor_for_prestige` everywhere & fix $g$ definition**~~ *(Done by H2 in v3.3: $P_{\text{van}}(t)=\gamma P_{\text{van}}(t-1)+\Delta P(t)$ retention wording and global $g$ formula.)*
 8. ~~**Scrub unjustified `"lab"` / `"laboratories"` wording**~~ *(Done by H2 in v3.3.)*
-9. **Add "Standard Simulation Protocol" (`ADR-0003` clock) + explicit threefold
-   Goal/Proxy distinction (§2.1--§2.3)** --- *[READY FOR DISPATCH]* (`IE-0007`
-   #1, #4; `ADR-0003`; Gate B).
+9. ~~**Add "Standard Simulation Protocol" (`ADR-0003` clock) + explicit threefold
+   Goal/Proxy distinction (§2.1--§2.3)**~~ *(Done by D2 in v3.4; §6/§7 updated with D3 shares & `IE-0006` pointer; $d_{\text{own},P}$ definition queued in F1.)*
 
-## 2.3 ADR-0003 Mechanical Re-Parameterization & Re-Run Wave (NEW — High Priority)
+## 2.3 ADR-0003 Mechanical Re-Parameterization & Re-Run Wave
 
-10. **Implement `ADR-0003` core clock & `P-0009` turnover in `sciencemodels/`**
-    --- *[READY FOR DISPATCH]*. Update `model.py`/`agents.py`/`sweeps.py`
-    defaults (`age += 0.5`, $\gamma = 0.933$, $g_{\text{canon}} = 0.25$,
-    `exit_mode` with `fixed_span` and `age_hazard_staggered` at `TAU_MAX = 80`),
-    refresh `tests/test_smoke.py` canary (archiving pre-`ADR-0003` anchor).
-11. **Re-run Phase-1 archives under `ADR-0003` clock (`data/*_adr0003/`)** ---
-    *[Depends on #10]*. Re-run `T1`, `W_v05`, `career_flows`, `prestige_stock`,
-    `turnover`, `interventions`, and `path_b` into new `data/*_adr0003/`
-    directories (preserving pre-`ADR-0003` archives), verify directional
-    robustness, and refresh Figures 1--16 in `paper_sketch_v1.md` v3.4.
+10. ~~**Implement `ADR-0003` core clock & `P-0009` turnover in `sciencemodels/`**~~
+    *(Done by D1 in `8b36a72`; `prestige_weight_in_visibility` added by F3 in `c2b94eb` on `task/attraction-trias-heatmap`.)*
+11. **Re-run Phase-1 archives under `ADR-0003` clock & rebuild Paper v3.5** ---
+    *Core re-run DONE (D6 `4e3c301`, 6,380 runs, 16/19 robust; F2 `08397f8`, 600 runs; F3 `c2b94eb`, 1,800 runs). Paper v3.5 figure/prose rebuild (`F1`, `task/paper-v35-adr0003`) in flight; must incorporate F2's `M2` $\lambda=1$ sign flip ($-0.0404$ below `M1` on `ADR-0003`) and F3's vertical-contour heatmap ($<0.7^\circ$ tilt).*
 
-## 2.4 High-Leverage Figure & Methodological Upgrades (`paper_sketch_v1.md` v3.4)
+## 2.4 High-Leverage Figure & Methodological Upgrades (`paper_sketch_v1.md` v3.5)
 
-12. **Densify Figure 1 along $\xi$ + add 3-panel spatial grid snapshots** ---
-    *[Run on `ADR-0003` clock after #10, or prototype grid snapshots now]*
-    (`IE-0007` #7).
-13. **Add missing temporal visualizations** --- *[Run on `ADR-0003` clock]*
-    (`IE-0007` #8). Temporal trajectories of harvest/exploration dynamics
-    alongside existing Figures 5b and 11a.
-14. **Extend Figure 9's counterfactual ablation-share decomposition to `M2`**
-    --- *[READY FOR DISPATCH (H4)]* (`IE-0007` #6).
+12. ~~**Densify Figure 1 along $\xi$ + add 3-panel spatial grid snapshots**~~ ---
+    *(Dense 11-point $\xi$ data banked in `data/fig1_xi_adr0003/`; D5 3-panel `Noisy2` snapshot + temporal curves built; integration into v3.5 in F1.)*
+13. ~~**Add missing temporal visualizations**~~ --- *(D5 `D5_temporal_Noisy2_H200_v0p933_g0_n20.{png,pdf}` built; integration into v3.5 in F1.)*
+14. ~~**Extend Figure 9's counterfactual ablation-share decomposition to `M2`**~~
+    *(Done by H4 `681497d` + independently reproduced by D3 `fb797fb` + re-checked at $n=40$ on `ADR-0003` by F2 `08397f8`.)*
+15. ~~**2D Attraction-Trias Heatmap ($\xi \times w$)**~~ *(Done by F3 `c2b94eb`, 1,800 runs: iso-lines vertical $<0.7^\circ$ in all 4 panels; ready to merge & embed in v3.5.)*
 
 ## 2.5 Scoped New Research Branches (Separate from Phase-1 Paper Closure)
 
-15. ~~**Prototype `IE-0006` Option 5 (Gaussian neighbour refill) across $\sigma$**~~
-    *(Done by H3: 720 runs in `data/refill_gaussian_v1/`, report at
-    `output/reports/refill_gaussian_v1.md`. Key finding: $\sigma=1$ does NOT
-    replicate `occupied` lock-in; $\sigma=6$ boosts breadth to $0.832$ and
-    `corr(P, M*)` to $+0.150$ at the central cell while conserving stock. Next:
-    spatial peak-tracking check & pairing with `P-0007` under `ADR-0003`.)*
-16. **Draft `P-0012` (Evolutionary curiosity selection from `IE-0008`)** ---
-    *[READY FOR DISPATCH after owner review of expanded `IE-0008`]*.
+16. ~~**Prototype `IE-0006` Option 5 (Gaussian neighbour refill) + peak tracking + `P-0007` sabbaticals**~~
+    *(Done by H3 `f459ce7` [720 runs] + D4 `4d9da1a` [360 runs @ $H=800$]: all 6 arms flat diffusion [directedness 0.023--0.032], sabbaticals saturate breadth but leave throughput flat at $0.0049$/step vs `frontier` $0.343$/step. Full findings recorded in `IE-0006`, status **`deferred`**.)*
+17. **Draft `P-0012` (Evolutionary curiosity selection from `IE-0008`)** ---
+    *Selection mechanism expanded in `IE-0008` (2026-11-26); ready to scope as `P-0012` outside Phase-1 paper.*
+18. **Governance: Draft Two-Admirals ADR (`ADR-0004`)** --- *Awaiting owner ruling to formalize co-command (Jakob Kapeller & Paul Banse).*
 
 ---
 
@@ -138,6 +127,7 @@ This section integrates all remaining open items from
 
 # Revision Log
 
+- **Version 1.2** (27 November 2026) --- Marked D1 (`8b36a72`), D2 (v3.4), D3/H4 (`681497d`/`fb797fb`), D4 (`4d9da1a`), D5, D6 (`4e3c301`), F2 (`08397f8`), and F3 (`c2b94eb`) completed; updated §2.3/§2.4 with F2's `M2` $\lambda=1$ sign flip and F3's vertical-contour heatmap; added proposed `ADR-0004` (Two Admirals co-command).
 - **Version 1.1** (26 November 2026) --- Recorded owner rulings on Gate A
   (`ADR-0003`: full 6-month step clock) and Gate B (threefold goal/proxy
   distinction in Phase-1 paper; explicit selection mechanism added to

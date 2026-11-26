@@ -65,7 +65,7 @@ already decided.
 | `drafts/` | Paper drafts and manuscript sketches (`drafts/archive/` holds superseded drafts) | live |
 | `output/reports/` | Round reports and generated outputs (owner directive 2026-11-14) | live |
 | `AdmiralsLog/` | Records: logs, decisions, bugs, ideas, unexplored, proposals, archive | live |
-| `AdmiralsLog/contributions/` | External contribution boundary (Franz, Paul, Niklas material) | live |
+| `AdmiralsLog/contributions/` | External contribution boundary (Franz, Niklas, and sibling-project material; co-Admirals Jakob & Paul write directly to live records per ADR-0004) | live |
 | `helpers/` | Supporting tooling (created when its first file arrives) | planned |
 
 # Frozen Zones
@@ -102,9 +102,9 @@ here.
 
 # Rules for Folders, Files and Repos
 
-- Git: `origin` is `https://github.com/paulbanse/sciencemodels.git` (a
-  collaborator's GitHub). Agents commit locally under the identity their
-  environment configures and **never push**; pushing is the owner's action
+- Git: `origin` is `https://github.com/paulbanse/sciencemodels.git` (co-Admiral
+  Paul Banse's GitHub; see `ADR-0004`). Agents commit locally under the identity their
+  environment configures and **never push**; pushing is the Admirals' action
   from the host. Commit by pathspec in shared trees; re-check
   `git status` immediately before committing; never switch branches unasked.
   Current working branch is `jokoexplore` (exploration round); the default
@@ -135,7 +135,7 @@ here.
   pinned fault; a DE for an abandoned approach; an IE for a captured idea; a
   UE for a parked strategic item; a P for a route or direction awaiting the
   owner's ruling; an archive move when a first-level document is superseded.
-- Ids are consecutive and never reused; counters currently: next ADR-0004,
+- Ids are consecutive and never reused; counters currently: next ADR-0005,
   BUG-0007, CONT8, DE-0001, IE-0009, UE-0004, P-0012.
 - Every session leaves one entry in `AdmiralsLog/logs/<YYYY-MM>.md`
   (append-only).

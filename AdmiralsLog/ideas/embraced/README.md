@@ -6,4 +6,4 @@ real work. `IDEA.md` (repository root) is authoritative.
 
 | IE | Idea | Status |
 | --- | --- | --- |
-| (none yet) | - | - |
+| IE-0004 | Discovery-phase vs. depletion-phase window reporters (`early100`/`late100`, implemented as Discovery/Depletion bands & `c_ideal_late`) | embraced (2026-11-27) |

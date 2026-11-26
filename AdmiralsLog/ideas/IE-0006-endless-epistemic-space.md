@@ -2,15 +2,15 @@
 title: "IE-0006 - Options for an endless epistemic space"
 author: "Antigravity, Paul"
 date: "2026-11-16"
-updated: "2026-11-24"
+updated: "2026-11-26"
 tags: [idea, epistemic-landscape, open-endedness, refills, scaling, horizon]
 project: "sciencemodels"
 status: idea
 ---
 
-- **Status:** idea
+- **Status:** idea (open — Option 5 pilot complete in `refill_gaussian_v1/v2` and `P-0007` filed as executed; broader open-endedness options 1–4 remain open outside the Phase-1 paper)
 - **Date:** 2026-11-16
-- **Updated:** 2026-11-24
+- **Updated:** 2026-11-26
 - **Related:** `AdmiralsLog/proposals/P-0007-sabbatical-shocks-x-frontier-refills.md`, `output/reports/interventions_v1.md` (Arm C), `output/reports/turnover_v1.md` (`R6`), `drafts/paper_sketch_v1.md` (Sections 4.3 & 5.3)
 
 ## The idea
@@ -50,3 +50,26 @@ Four design options can make epistemic space effectively endless, with distinct 
 ## Code-verified assessment
 
 The Gaussian-neighbour refill (Option 5) is new code with a $\sigma$-dependent failure mode at both ends. `MyModel.farm` only removes harvested knowledge from the harvested tile (`sciencemodels/model.py:393-404`); no redistribution kernel exists. With small $\sigma$, refilled stock lands inside the 4-neighbour search horizon (`sciencemodels/agents.py:194-196`), so agents re-harvest the same local peak and visibility herding reproduces the `occupied` regime's mainstream lock-in (Arm C `R8`, $-83.8\%$ exploration). With $\sigma$ approaching the torus scale the kernel tends to uniform injection, leaving peaks unclaimed (`frontier`-like, $315\times$ residual knowledge) unless mobility (`P-0007`) is added. $\sigma$ must therefore be reported relative to both the search radius and $L$, with explicit truncation and renormalisation on the $20\times20$ torus. Finally, `percentage_knowledge_harvested` is `(total_initial_knowledge - sum(knowledge)) / total_initial_knowledge` (`sciencemodels/model.py:542-545`), so injection can make it fall or go negative; the rate/flow metric named in the Cons is mandatory.
+
+
+## Empirical pilot report — Option 5 (`refill_gaussian_v1`, 2026-11-26)
+
+**Status: Deferred** from the Phase-1 paper (1-sentence pointer in `drafts/paper_sketch_v1.md` §7; full provenance in `output/reports/refill_gaussian_v1.md` and `scripts/refill_gaussian/`).
+
+- **Design:** 36 cells $\times$ 20 seeds = **720 runs** on `mgstd5` ($N=20$, $H=400$, $c \in \{0.3, 0.5, 0.7\}$, $g \in \{0.0, 0.1\}$, 0 failures; stock conservation verified to $1.8 \times 10^{-15}$; `off` bit-identical to `MyModel`). Compares `off`, `occupied`, `frontier`, and harvest-conserving 2D torus Gaussian neighbour refill at $\sigma \in \{1, 3, 6\}$ (source tile excluded, renormalized).
+- **Central cell ($c = 0.5$, $g = 0.1$, 20 seeds):**
+
+| Regime | Explored final (SD) | Late flow (last 50) | Cum. flow (400 steps) | Time-mean `Corr(P, M*)` | Final stock |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `off` | 0.479 (0.038) | 0.0005 | 0.937 | +0.085 | 0.063 |
+| `occupied` | 0.063 (0.013) | 0.2053 | 59.411 | +0.145 | 4.521 |
+| `frontier` | 0.537 (0.059) | 0.2709 | 84.678 | +0.305 | 57.519 |
+| `gaussian_s1` | 0.409 (0.039) | 0.0092 | 3.567 | +0.046 | 1.000 |
+| `gaussian_s3` | 0.577 (0.050) | 0.0041 | 1.949 | +0.095 | 1.000 |
+| `gaussian_s6` | 0.832 (0.050) | 0.0030 | 1.498 | +0.150 | 1.000 |
+
+- **Findings:**
+  1. *Small $\sigma = 1$ does NOT replicate `occupied` lock-in:* explored share drops only $-0.028$ to $-0.070$ vs. `off` (compared to $-0.322$ to $-0.416$ for `occupied`), because only the harvested flow $\Delta k$ is redistributed rather than injecting fresh full-tile draws in place.
+  2. *Large $\sigma = 6$ trades throughput for breadth and lifts alignment:* explored share climbs to $0.832$ ($+0.353$ over `off`) and time-mean `Corr(P, M*)` rises to $+0.150$ (vs. $+0.085$ `off`), but conserving total stock at $1.000$ spreads knowledge thinly so late flow falls to $0.0030$/step.
+  3. *Non-conserving arms inflate flow:* `occupied` and `frontier` end with total stock $4.52$ and $57.52$ respectively, so `gaussian` is the only pure redistribution benchmark.
+  4. *Follow-up completed (`refill_gaussian_v2`, D4 `4d9da1a`, 18 cells / 360 runs @ $H=800$, `output/reports/refill_gaussian_v2.md`):* **(a) No traveling frontier** — all six arms classify as *flat diffusion* (top-5% centroid directedness $0.023\text{–}0.032$, net displacement 6–8 tiles vs. path length 300–330 tiles). **(b) Sabbaticals lift breadth, not throughput** — `p_reloc = 0.02` pushes `gaussian_s3` explored share to $1.000$ ($+0.053\text{–}+0.110$), but late harvest flow stays flat at $0.0049$/step vs. `frontier`'s $0.343\text{–}0.367$/step ($\approx 70\times$). Thus `P-0007`'s throughput conjecture does not materialize under stock-conserving refills.
