@@ -4,12 +4,13 @@ author: "Paul"
 date: "2026-11-24"
 tags: [idea]
 project: "sciencemodels"
-status: idea
+status: embraced
 ---
 
-- **Status:** idea
+- **Status:** embraced (2026-11-27 — all 8 items addressed and integrated into `drafts/paper_sketch_v1.md` v3.5 and `ADR-0003`)
 - **Date:** 2026-11-24
-- **Related:** 
+- **Updated:** 2026-11-27
+- **Related:** `AdmiralsLog/decisions/accepted/ADR-0003-time-scale-anchoring.md`, `drafts/paper_sketch_v1.md` (v3.5), `output/reports/adr0003_remeasure_v1.md`, `output/reports/m2_decomposition_v1.md`, `output/reports/attraction_heatmap_landscapes_v1.md`
 
 ## The idea
 
@@ -60,3 +61,18 @@ status: idea
 - **#2 is inverted by the code.** `vanishing_factor_for_prestige` is applied in `Scientist.increase_prestige`: the accumulated stock is multiplied by $x$ and the new accrual added (`sciencemodels/agents.py:84-91`, `temp = temp * x; temp += value`). $x$ is a retention factor (1.0 = no forgetting; 0.5 = halve the stock per accrual), not a decay rate. The tested values 0.5/0.9/1.0 already span strong-to-no forgetting; lowering to 0.1 would strengthen forgetting, not weaken it, and weakening it means raising $x$ toward 1.0. It also acts per accrual event (roughly per step), so a "half after five years" reading needs a step-to-time mapping.
 - **#3 is confirmed, with a stronger consequence.** With `use_distance=0`, `compute_all_rewards` returns `curiosity * novelty / avg_current_agent_knowledge` and zero visibility (`sciencemodels/agents.py:123-126`), while `Scientist.step` still evaluates only the 4-neighbour von Neumann neighbourhood (`sciencemodels/agents.py:194-196`). This is local search with visibility off, not jump search. Because curiosity is a common multiplicative constant across all candidate rewards, it cancels in the comparison; under `use_distance=0` curiosity cannot alter movement (only `epsilon` noise can), so the draft's "different levels of curiosity" comparison is mechanically empty unless the reward is reformulated.
 
+
+## Final Disposition Report (2026-11-27 — Embraced)
+
+All eight review proposals from Paul Banse (`f3d53a3`) have been resolved and integrated into **Paper v3.5** (`drafts/paper_sketch_v1.md` / `.pdf`) and the core package (`sciencemodels/`):
+
+| # | Proposal | Resolution | Executed Artifacts / Commits |
+| ---: | :--- | :--- | :--- |
+| **1** | **Real-academia time-scale framing** (1 step = 6 months, 80-step career, constant-population retirement, 5-year prestige half-life) | **Adopted in full as `ADR-0003`** (mechanical re-parameterization, non-calibration preserved): `age` $25 \to 65$ (`+0.5`/step), `tau_max = 80`, $g_{\text{canon}} = 0.25$, $\gamma = 0.5^{1/10} \approx 0.933$, `fixed_span` promoted to core; 6,380 + 600 + 5,400 runs re-executed on the new clock and all 11 core figures rebuilt. | `ADR-0003`, `8b36a72`, `4e3c301`, `08397f8`, `06ecf65` |
+| **2** | **Vanishing parameter tested is too big** | **Code inversion clarified & disambiguated:** `vanishing_factor_for_prestige` is a *retention* factor in $P_{\text{van}}(t) = \gamma P_{\text{van}}(t-1) + \Delta P(t)$ ($\gamma = 0.9$ = 10% decay/step, $\sim 3.3$-yr half-life; $\gamma = 0.1$ would be 90% decay/step). Adopted Paul's 5-year half-life target ($\gamma = 0.933$) and replaced "vanishing pin" terminology with explicit retention-factor notation throughout the paper. | `ADR-0003`, `paper_sketch_v1.md` §§2.2–2.3 (v3.3–v3.5) |
+| **3** | **`use_distance = 0` confusingly called "jump"** | **Adopted (removed):** Confirmed `use_distance = 0` disables visibility on the 4-neighbour grid rather than implementing jumps. Removed the inaccurate §3.2 and old Figure 3, and updated all figure numbers and provenance tables. | `paper_sketch_v1.md` v3.3 (`06ecf65` / `4c65bef`) |
+| **4** | **Standardize simulation procedure & justify 10% harvest milestone** | **Adopted:** Added §2.2.1 *Standard Simulation Protocol* fixing canonical $H = 200/400$, $\gamma = 0.933$, $g = 0.25$, representative slices $c \in \{0.9, 0.5, 0.1\}$, and justifying `harvested_10_step` as a horizon-independent early-discovery speed milestone. | `paper_sketch_v1.md` §2.2.1 (v3.4–v3.5) |
+| **5** | **Unjustified use of `"lab"`** | **Adopted:** Replaced both stray `"lab"` / `"laboratories"` occurrences with `"mentor-advisee cluster"` (§4.1) and `"research group"` (§5.1). | `paper_sketch_v1.md` v3.3 |
+| **6** | **Extend Figure 9's counterfactual decomposition method** | **Adopted:** Extended Figure 9's additive ablation-share decomposition to `Tier M2` (`dyadic_move_pull` vs. nominal links vs. `equal_split`), independently reproduced to 0-digit mismatch, and re-verified at $n = 40$ on the `ADR-0003` clock (co-movement carries $+96.6\%$–$+117.9\%$). | `681497d`, `fb797fb`, `08397f8`, `output/reports/m2_decomposition_v1.md`, `paper_sketch_v1.md` §6 |
+| **7** | **Densify Figure 1 + 3-panel spatial grid snapshots** | **Adopted:** Densified Figure 1 (`F6_v2`) to an **11-point $\xi$ grid** (`data/fig1_xi_adr0003/`, 1,100 runs) with $\ge 2$ points per phase, built the 3-panel `Noisy2` spatial snapshot figure (Stage 1 scattered / Kink clustering / Stage 2 single-tile collapse) as **Figure 3**, and added **Figure 1b** (`F_attraction_trias_heatmap`, 12/12 vertical panels across 5,400 runs on `mgstd5`, `MultG6`, `Noisy2`). | `06ecf65`, `c2b94eb`, `4049f28`, `4c65bef` |
+| **8** | **Missing temporal visualizations** | **Adopted:** Built and integrated **Figure 4** (`D5_temporal_Noisy2_H200_v0p933_g0_n20`: 2-panel harvest & exploration trajectories over $t = 0\text{..}200$ with the 10% milestone line and 95% CI bands). Evolutionary curiosity-over-time visualization is scoped under `IE-0008` / future `P-0012`. | `scripts/fig_prototypes/build_snapshots_and_temporal.py`, `paper_sketch_v1.md` §3 (Fig. 4) |
